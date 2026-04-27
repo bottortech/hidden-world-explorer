@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hidden World Explorer</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        height: 100%;
+        background: #150a25;
+        color: #d6cce0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      #app { position: fixed; inset: 0; }
+
+      /* Cinematic vignette — slight darkening at the edges, transparent in the
+         center. CSS-only so it costs nothing on the GPU. */
+      #vignette {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 0, 0, 0) 55%,
+          rgba(8, 4, 16, 0.55) 100%
+        );
+      }
+
+      /* Cinematic objective subtitle. Fades in/out via the .visible class.
+         Bottom-center placement reads as subtitle, not HUD. */
+      #objective {
+        position: fixed;
+        bottom: 12%;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 80%;
+        text-align: center;
+        font-size: 16px;
+        font-style: italic;
+        letter-spacing: 0.06em;
+        color: #e6dcf2;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.7s ease-in-out;
+        z-index: 8;
+      }
+      #objective.visible { opacity: 0.92; }
+
+      /* Click-to-start hint, hidden once pointer lock engages. */
+      #hint {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 12px 18px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        pointer-events: none;
+        letter-spacing: 0.04em;
+        font-size: 14px;
+        text-align: center;
+        line-height: 1.5;
+        z-index: 10;
+      }
+      #hint.hidden { display: none; }
+
+      /* Subtle crosshair, visible only while locked. */
+      #crosshair {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 4px;
+        height: 4px;
+        margin: -2px 0 0 -2px;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 50%;
+        pointer-events: none;
+        display: none;
+        z-index: 10;
+      }
+      #crosshair.active { display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="vignette"></div>
+    <div id="objective"></div>
+    <div id="hint">
+      Click or press Enter to begin<br />
+      WASD to move &nbsp;|&nbsp; Mouse to look &nbsp;|&nbsp; Click objects to interact &nbsp;|&nbsp; Esc to release cursor
+    </div>
+    <div id="crosshair"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
