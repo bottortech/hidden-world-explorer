@@ -228,8 +228,8 @@ export class Attic {
 
     // --- Clue P: postcard -----------------------------------------------------
     const postcard = makePostcardMesh();
-    postcard.position.set(benchX - 0.05, benchTop_y + 0.012, benchZ + 1.0);
-    postcard.rotation.y = 0.05;
+    postcard.position.set(benchX - 0.05, benchTop_y + 0.018, benchZ + 1.0);
+    postcard.rotation.y = 0.18;
     this.group.add(postcard);
     new Clue(interaction, journal, inspect, {
       id: 'attic-postcard',
@@ -443,9 +443,9 @@ function makeFoldedMapMesh() {
 
 function makePostcardMesh() {
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xd9b88a, emissive: 0xa86a3a, emissiveIntensity: 0.45, roughness: 1,
+    color: 0xeac79a, emissive: 0xc88a4a, emissiveIntensity: 0.75, roughness: 1,
   });
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.005, 0.13), mat);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.025, 0.18), mat);
   return m;
 }
 
