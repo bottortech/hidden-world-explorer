@@ -53,20 +53,35 @@ export class InteractionSystem {
   }
 
   _handleClick() {
-    if (!this.currentLookTarget) return;
-    const entry = this.entries.find((e) => e.object === this.currentLookTarget);
-    if (entry?.onClick) entry.onClick(entry);
+    if (!this.currentEntry) return;
+    if (this.currentEntry.onClick) this.currentEntry.onClick(this.currentEntry);
+  }
+
+  // Walk up from a hit object to find the registered entry. Necessary because
+  // many props are THREE.Group containers — the raycaster hits the inner mesh,
+  // but the entry was registered against the group.
+  _entryForObject(obj) {
+    let cur = obj;
+    while (cur) {
+      const entry = this.entries.find((e) => e.object === cur);
+      if (entry) return entry;
+      cur = cur.parent;
+    }
+    return null;
   }
 
   update(/* dt */) {
     // Raycast from screen center to find what the player is looking at.
+    // Recursive so children of Group-based props are hit-testable.
     this.raycaster.setFromCamera(this.center, this.camera);
-    const hits = this.raycaster.intersectObjects(this._hitTargets(), false);
+    const hits = this.raycaster.intersectObjects(this._hitTargets(), true);
     const hit = hits.find((h) => h.distance <= this.maxLookDist);
-    this.currentLookTarget = hit ? hit.object : null;
+    const entry = hit ? this._entryForObject(hit.object) : null;
+
+    this.currentEntry = entry;
+    this.currentLookTarget = entry ? entry.object : null;
 
     // Drive the on-screen prompt + crosshair "hot" state.
-    const entry = hit ? this.entries.find((e) => e.object === hit.object) : null;
     const isClickable = !!entry?.onClick;
     this.crosshair?.classList.toggle('has-target', isClickable);
     this.lookPrompt?.classList.toggle('visible', isClickable);
