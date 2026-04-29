@@ -29,6 +29,9 @@ export class InteractionSystem {
     this.entries = [];
     this.currentLookTarget = null;
 
+    this.crosshair = document.getElementById('crosshair');
+    this.lookPrompt = document.getElementById('lookPrompt');
+
     domElement.addEventListener('click', () => this._handleClick());
   }
 
@@ -62,10 +65,13 @@ export class InteractionSystem {
     const hit = hits.find((h) => h.distance <= this.maxLookDist);
     this.currentLookTarget = hit ? hit.object : null;
 
-    if (hit) {
-      const entry = this.entries.find((e) => e.object === hit.object);
-      entry?.onLook?.(entry, hit);
-    }
+    // Drive the on-screen prompt + crosshair "hot" state.
+    const entry = hit ? this.entries.find((e) => e.object === hit.object) : null;
+    const isClickable = !!entry?.onClick;
+    this.crosshair?.classList.toggle('has-target', isClickable);
+    this.lookPrompt?.classList.toggle('visible', isClickable);
+
+    if (hit) entry?.onLook?.(entry, hit);
 
     // Proximity pass.
     const playerPos = this.camera.position;

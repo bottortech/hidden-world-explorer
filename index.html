@@ -85,6 +85,32 @@
         z-index: 10;
       }
       #crosshair.active { display: block; }
+      #crosshair.has-target {
+        width: 10px;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        background: rgba(232, 216, 255, 0.95);
+        box-shadow: 0 0 12px rgba(184, 157, 214, 0.9);
+      }
+
+      /* "Click to inspect" prompt that appears below the crosshair when
+         the player is looking at an interactable. */
+      #lookPrompt {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, 24px);
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(232, 216, 255, 0.85);
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 140ms ease;
+        z-index: 11;
+      }
+      #lookPrompt.visible { opacity: 1; }
     </style>
   </head>
   <body>
@@ -93,9 +119,10 @@
     <div id="objective"></div>
     <div id="hint">
       Click or press Enter to begin<br />
-      WASD to move &nbsp;|&nbsp; Mouse to look &nbsp;|&nbsp; Click objects to interact &nbsp;|&nbsp; Esc to release cursor
+      WASD to move &nbsp;|&nbsp; Mouse to look &nbsp;|&nbsp; Click objects to inspect &nbsp;|&nbsp; J for journal &nbsp;|&nbsp; Esc to release cursor
     </div>
     <div id="crosshair"></div>
+    <div id="lookPrompt">Click to inspect</div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

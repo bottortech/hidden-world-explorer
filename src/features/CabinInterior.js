@@ -124,6 +124,7 @@ export class CabinInterior {
 
     if (save.isRoomComplete('cabin')) {
       cabin.openDoor();
+      onSolved?.({ alreadySolved: true });
     }
   }
 
