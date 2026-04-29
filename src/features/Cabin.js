@@ -1,62 +1,56 @@
 import * as THREE from 'three';
 import { COLORS } from '../utils/colors.js';
-import { smoothstep } from '../utils/math.js';
 
-// Abandoned, weathered cabin sitting in a clearing in the NE forest. Single
-// 6×6 room, open south doorway. Two clickable interiors:
-//   • Crystal shard on a desk — clicking lifts it to chest height where it
-//     hovers, and reveals the rune trail toward the mystery zone.
-//   • Wall-mounted glowing rune sigil — clicking flares its glow briefly
-//     (atmospheric only; no progression effect).
+// Single-room weathered cabin sitting in a clearing in the NE forest. This
+// feature owns *only* the structure: walls, floor, roof, doorway, door, a
+// fireplace recess, a desk, and a chair. Puzzle content (clues, dial) lives
+// in CabinInterior so the geometry can be tweaked without touching the
+// puzzle wiring (and vice versa).
 //
-// Walls are exposed as AABB colliders via `getColliders()` so MovementSystem
-// can stop the player at solid surfaces. The doorway gap is left clear so
-// the player can walk in.
+// Door state machine:
+//   'open'    — initial. Doorway is clear.
+//   'closing' — auto-fired the first time the player crosses interiorAABB.
+//   'closed'  — collider blocks the doorway. Player is sealed in.
+//   'opening' — fired by openDoor() (called from CabinInterior on dial solve).
+// All transitions are animated by lerp in update().
 //
-// To extend: add weathered planks (slight gaps between wall pieces), a
-// flickering candle, fallen objects, or a second room.
+// Public API used by CabinInterior:
+//   isPlayerInside(pos), getDoorAnchor(), openDoor()
+// Plus mounting points exposed as fields for placing puzzle props:
+//   deskTop, beamPos, hearthPos, chairTop, chairUnderside, doorInteriorAnchor
 export class Cabin {
-  constructor(scene, interaction, movement, objectives, runeTrail) {
+  constructor(scene, movement) {
     this.movement = movement;
-    this.objectives = objectives;
-    this.runeTrail = runeTrail;
 
-    // Cabin footprint centered on (22, -22). Single open doorway in the
-    // south wall (player approaches from the south along the path).
     this.cx = 22;
     this.cz = -22;
-    this.w = 6;          // outer width along X
-    this.d = 6;          // outer depth along Z
-    this.h = 3;          // wall height
-    this.wallT = 0.2;    // wall thickness
-    this.doorW = 1.6;    // doorway opening width
+    this.w = 6;
+    this.d = 6;
+    this.h = 3;
+    this.wallT = 0.2;
+    this.doorW = 1.6;
+    this.doorH = 2.4;
 
     this.group = new THREE.Group();
     this.group.name = 'cabin';
 
     const woodMat = new THREE.MeshStandardMaterial({
-      color: COLORS.wood,
-      roughness: 1,
-      flatShading: true,
+      color: COLORS.wood, roughness: 1, flatShading: true,
     });
     const floorMat = new THREE.MeshStandardMaterial({
-      color: COLORS.woodAccent,
-      roughness: 1,
+      color: COLORS.woodAccent, roughness: 1,
+    });
+    const darkWoodMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1f1a, roughness: 1, flatShading: true,
     });
 
     // --- Floor & roof ---------------------------------------------------------
-    const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(this.w, 0.1, this.d),
-      floorMat,
-    );
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(this.w, 0.1, this.d), floorMat);
     floor.position.set(this.cx, 0.05, this.cz);
     this.group.add(floor);
 
-    // Slightly oversized roof slab with a small weathered tilt — reads as
-    // "abandoned" without needing a real gable.
     const roof = new THREE.Mesh(
-      new THREE.BoxGeometry(this.w + 0.5, 0.18, this.d + 0.5),
-      woodMat,
+      new THREE.BoxGeometry(this.w + 0.5, 0.18, this.d + 0.5), woodMat,
     );
     roof.position.set(this.cx, this.h + 0.09, this.cz);
     roof.rotation.z = 0.025;
@@ -64,127 +58,139 @@ export class Cabin {
     this.group.add(roof);
 
     // --- Walls ----------------------------------------------------------------
-    // Wall positions are computed from the footprint so changing w/d/cx/cz
-    // automatically rebuilds correctly. Light random tilt per wall reads
-    // as weathered.
     const halfW = this.w / 2;
     const halfD = this.d / 2;
     const halfDoor = this.doorW / 2;
     const sideLen = halfW - halfDoor;
 
-    // North wall (z = cz - halfD): full width
-    this._addWall(woodMat, this.cx, this.cz - halfD, this.w, this.wallT);
-    // East wall (x = cx + halfW): full depth
-    this._addWall(woodMat, this.cx + halfW, this.cz, this.wallT, this.d);
-    // West wall
-    this._addWall(woodMat, this.cx - halfW, this.cz, this.wallT, this.d);
-    // South wall: split into two segments around the doorway
-    this._addWall(
-      woodMat,
-      this.cx - halfDoor - sideLen / 2,
-      this.cz + halfD,
-      sideLen,
-      this.wallT,
-    );
-    this._addWall(
-      woodMat,
-      this.cx + halfDoor + sideLen / 2,
-      this.cz + halfD,
-      sideLen,
-      this.wallT,
-    );
-    // South wall lintel above doorway (decorative — not a collider, so
-    // player can pass under freely).
+    this._addWall(woodMat, this.cx, this.cz - halfD, this.w, this.wallT);          // north
+    this._addWall(woodMat, this.cx + halfW, this.cz, this.wallT, this.d);          // east
+    this._addWall(woodMat, this.cx - halfW, this.cz, this.wallT, this.d);          // west
+    this._addWall(woodMat, this.cx - halfDoor - sideLen / 2, this.cz + halfD, sideLen, this.wallT);
+    this._addWall(woodMat, this.cx + halfDoor + sideLen / 2, this.cz + halfD, sideLen, this.wallT);
+
     const lintel = new THREE.Mesh(
-      new THREE.BoxGeometry(this.doorW + 0.05, 0.6, this.wallT),
+      new THREE.BoxGeometry(this.doorW + 0.05, 0.6 + (this.h - this.doorH), this.wallT),
       woodMat,
     );
-    lintel.position.set(this.cx, this.h - 0.3, this.cz + halfD);
+    lintel.position.set(this.cx, this.doorH + (this.h - this.doorH) / 2, this.cz + halfD);
     this.group.add(lintel);
 
+    // --- Door (hinge group) ---------------------------------------------------
+    // Hinge is at the west edge of the doorway. Door mesh extends east from
+    // the hinge so rotating the group around Y swings it open/closed cleanly.
+    this.doorHinge = new THREE.Group();
+    this.doorHinge.position.set(
+      this.cx - halfDoor, this.doorH / 2, this.cz + halfD,
+    );
+    this.group.add(this.doorHinge);
+
+    const doorMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(this.doorW, this.doorH, 0.08),
+      darkWoodMat,
+    );
+    doorMesh.position.set(this.doorW / 2, 0, 0);
+    this.doorHinge.add(doorMesh);
+    this.doorMesh = doorMesh;
+
+    // Iron-strap accents — three thin horizontal bars across the door.
+    const strapMat = new THREE.MeshStandardMaterial({ color: 0x18120e, roughness: 0.8 });
+    for (const y of [-0.7, 0, 0.7]) {
+      const strap = new THREE.Mesh(
+        new THREE.BoxGeometry(this.doorW, 0.06, 0.085), strapMat,
+      );
+      strap.position.set(this.doorW / 2, y, 0);
+      this.doorHinge.add(strap);
+    }
+
+    // Door state. Rotation 0 = closed, +π/2 = open inward (into cabin).
+    this.doorState = 'open';
+    this.doorRotTarget = Math.PI / 2;
+    this.doorHinge.rotation.y = Math.PI / 2;
+
+    // Doorway-blocking collider. Mutated in place: real AABB when closed,
+    // pushed off-grid when open (no allocations per frame).
+    this.doorCollider = { minX: 1e6, maxX: 1e6 + 1, minZ: 1e6, maxZ: 1e6 + 1 };
+    movement.addColliders([this.doorCollider]);
+
+    // --- Wall colliders -------------------------------------------------------
+    movement.addColliders(this._wallColliders());
+
     // --- Interior light -------------------------------------------------------
-    // Faint warm glow from the ceiling — inviting but mysterious. Falls off
-    // before bleeding much through the doorway.
     this.interiorLight = new THREE.PointLight(COLORS.warmLight, 1.6, 7.5, 1.6);
     this.interiorLight.position.set(this.cx, this.h - 0.5, this.cz);
     this.group.add(this.interiorLight);
 
     // --- Desk (north interior) ------------------------------------------------
-    const desk = new THREE.Mesh(
-      new THREE.BoxGeometry(2.0, 0.8, 1.0),
-      floorMat,
-    );
-    const deskZ = this.cz - halfD + 0.7; // pushed against north wall
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.8, 1.0), floorMat);
+    const deskZ = this.cz - halfD + 0.7;
     desk.position.set(this.cx, 0.4, deskZ);
     desk.rotation.y = 0.04;
     this.group.add(desk);
+    this.deskTop = new THREE.Vector3(this.cx, 0.81, deskZ);
 
-    // --- Crystal shard (artifact) --------------------------------------------
-    // Click → lifts to chest height, hovers, rotates, reveals rune trail.
-    this.shardStartPos = new THREE.Vector3(this.cx, 0.95, deskZ);
-    this.shardHoverPos = new THREE.Vector3(this.cx + 0.1, 1.45, deskZ + 0.7);
+    // --- Chair (next to desk) -------------------------------------------------
+    const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.7), floorMat);
+    const chairX = this.cx + 1.1;
+    const chairZ = deskZ + 0.9;
+    chairSeat.position.set(chairX, 0.46, chairZ);
+    chairSeat.rotation.y = -0.2;
+    this.group.add(chairSeat);
+    const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.85, 0.08), floorMat);
+    chairBack.position.set(chairX, 0.85, chairZ + 0.31);
+    chairBack.rotation.y = -0.2;
+    this.group.add(chairBack);
+    for (const [dx, dz] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.46, 0.06), floorMat);
+      leg.position.set(chairX + dx, 0.23, chairZ + dz);
+      this.group.add(leg);
+    }
+    // Place where the rune is carved on the underside of the seat.
+    this.chairUnderside = new THREE.Vector3(chairX, 0.42, chairZ);
 
-    const shardMat = new THREE.MeshStandardMaterial({
-      color: 0xe8d8ff,
-      emissive: COLORS.cubeEmissive,
-      emissiveIntensity: 1.0,
-      roughness: 0.25,
-      transparent: true,
-      opacity: 0.92,
-    });
-    this.shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), shardMat);
-    this.shard.position.copy(this.shardStartPos);
-    this.shard.scale.set(0.85, 1.4, 0.85); // elongated like a crystal
-    this.group.add(this.shard);
+    // --- Fireplace (west interior wall) ---------------------------------------
+    // A black recess in the west wall with a faint ember glow at its base.
+    const hearthW = 1.6;
+    const hearthH = 1.4;
+    const hearthD = 0.5;
+    const hearthX = this.cx - halfW + this.wallT + hearthD / 2 + 0.001;
+    const hearthZ = this.cz - 0.6;
+    const hearth = new THREE.Mesh(
+      new THREE.BoxGeometry(hearthD, hearthH, hearthW),
+      new THREE.MeshStandardMaterial({ color: 0x05030a, roughness: 1 }),
+    );
+    hearth.position.set(hearthX, hearthH / 2, hearthZ);
+    this.group.add(hearth);
 
-    // Soft point light on the shard so it casts on the desk + walls.
-    this.shardLight = new THREE.PointLight(COLORS.cubeEmissive, 0.7, 4, 1.5);
-    this.shardLight.position.copy(this.shardStartPos);
-    this.group.add(this.shardLight);
+    const mantle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.12, hearthW + 0.4), darkWoodMat,
+    );
+    mantle.position.set(hearthX + 0.05, hearthH + 0.1, hearthZ);
+    this.group.add(mantle);
 
-    this.shardActivated = false;
-    this.shardActivatedAt = 0;
+    const ember = new THREE.PointLight(0x884420, 0.6, 2.2, 2);
+    ember.position.set(hearthX + 0.1, 0.25, hearthZ);
+    this.group.add(ember);
+    this.ember = ember;
+    // Anchor for the soot rune (face of the hearth, just above the embers).
+    this.hearthPos = new THREE.Vector3(hearthX + 0.05, 0.5, hearthZ);
 
-    interaction.add({
-      object: this.shard,
-      onClick: () => {
-        // Walls aren't in the raycast list, so without this gate a player
-        // standing outside could click the shard through a wall.
-        if (!this._playerInside()) return;
-        this._activateShard();
-      },
-    });
+    // --- Beam (above interior, decorative) ------------------------------------
+    // Single cross-beam running E-W under the roof; its underside is where
+    // the beam-rune clue is carved.
+    const beam = new THREE.Mesh(
+      new THREE.BoxGeometry(this.w - 0.4, 0.18, 0.2), darkWoodMat,
+    );
+    beam.position.set(this.cx, this.h - 0.4, this.cz);
+    this.group.add(beam);
+    this.beamPos = new THREE.Vector3(this.cx, this.h - 0.55, this.cz);
 
-    // --- Wall rune sigil (note) ----------------------------------------------
-    // Mounted on the east interior wall, faces west into the room.
-    const runeTex = makeRuneTexture();
-    const runeMat = new THREE.MeshBasicMaterial({
-      map: runeTex,
-      color: COLORS.rune,
-      transparent: true,
-      opacity: 0.85,
-      fog: false,
-      side: THREE.DoubleSide,
-    });
-    this.runeSigil = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7), runeMat);
-    this.runeSigil.position.set(this.cx + halfW - 0.12, 1.7, this.cz);
-    this.runeSigil.rotation.y = -Math.PI / 2;
-    this.group.add(this.runeSigil);
+    // Anchor for the dial: just inside the door, above eye-level isn't great
+    // for clicking. Mount it at chest height on the door itself.
+    this.doorInteriorAnchor = new THREE.Vector3(
+      this.cx, 1.2, this.cz + halfD - 0.06,
+    );
 
-    this.runeFlashAt = 0;
-
-    interaction.add({
-      object: this.runeSigil,
-      onClick: () => {
-        if (!this._playerInside()) return;
-        this.runeFlashAt = performance.now();
-      },
-    });
-
-    // --- Entry detection ------------------------------------------------------
-    // Fires once when player crosses into the interior AABB (slightly inset
-    // from the walls so the trigger only fires after they're really inside).
-    this.entered = false;
     this.interiorAABB = {
       minX: this.cx - halfW + 0.5,
       maxX: this.cx + halfW - 0.5,
@@ -195,166 +201,88 @@ export class Cabin {
     scene.add(this.group);
   }
 
-  // Internal helper — adds a wall mesh AND records its AABB for collision.
   _addWall(mat, cx, cz, sx, sz) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, this.h, sz), mat);
     mesh.position.set(cx, this.h / 2, cz);
-    // Subtle weathering — each wall leans a hair off-true.
     mesh.rotation.z = (Math.random() - 0.5) * 0.012;
     this.group.add(mesh);
   }
 
-  // Returns AABBs for the player-blocking walls. Lintel is omitted so the
-  // player can walk under the doorway.
-  getColliders() {
+  _wallColliders() {
     const halfW = this.w / 2;
     const halfD = this.d / 2;
     const halfDoor = this.doorW / 2;
-    const sideLen = halfW - halfDoor;
     const t = this.wallT / 2;
-
     return [
-      // North
-      {
-        minX: this.cx - halfW, maxX: this.cx + halfW,
-        minZ: this.cz - halfD - t, maxZ: this.cz - halfD + t,
-      },
-      // East
-      {
-        minX: this.cx + halfW - t, maxX: this.cx + halfW + t,
-        minZ: this.cz - halfD, maxZ: this.cz + halfD,
-      },
-      // West
-      {
-        minX: this.cx - halfW - t, maxX: this.cx - halfW + t,
-        minZ: this.cz - halfD, maxZ: this.cz + halfD,
-      },
-      // South — left segment
-      {
-        minX: this.cx - halfW, maxX: this.cx - halfDoor,
-        minZ: this.cz + halfD - t, maxZ: this.cz + halfD + t,
-      },
-      // South — right segment
-      {
-        minX: this.cx + halfDoor, maxX: this.cx + halfW,
-        minZ: this.cz + halfD - t, maxZ: this.cz + halfD + t,
-      },
+      { minX: this.cx - halfW, maxX: this.cx + halfW, minZ: this.cz - halfD - t, maxZ: this.cz - halfD + t },
+      { minX: this.cx + halfW - t, maxX: this.cx + halfW + t, minZ: this.cz - halfD, maxZ: this.cz + halfD },
+      { minX: this.cx - halfW - t, maxX: this.cx - halfW + t, minZ: this.cz - halfD, maxZ: this.cz + halfD },
+      { minX: this.cx - halfW, maxX: this.cx - halfDoor, minZ: this.cz + halfD - t, maxZ: this.cz + halfD + t },
+      { minX: this.cx + halfDoor, maxX: this.cx + halfW, minZ: this.cz + halfD - t, maxZ: this.cz + halfD + t },
     ];
   }
 
-  _activateShard() {
-    if (this.shardActivated) return;
-    this.shardActivated = true;
-    this.shardActivatedAt = performance.now();
-    this.runeTrail?.reveal();
-  }
-
-  // Player center inside the interior AABB. Used to gate clicks on interior
-  // objects so they can't be triggered through walls from outside.
-  _playerInside() {
-    const p = this.movement.getPosition();
+  isPlayerInside(p = this.movement.getPosition()) {
     const a = this.interiorAABB;
     return p.x >= a.minX && p.x <= a.maxX && p.z >= a.minZ && p.z <= a.maxZ;
   }
 
-  update(dt) {
-    const now = performance.now();
-    const t = now * 0.001;
+  // Auto-close on first interior entry. Idempotent.
+  _sealDoor() {
+    if (this.doorState !== 'open') return;
+    this.doorState = 'closing';
+    this.doorRotTarget = 0;
+  }
 
-    // Cabin entry detection — fires once. Gated to step ≥ 3 so wandering
-    // into the cabin before the pillar is activated doesn't out-of-order
-    // the chain.
-    if (!this.entered && this.objectives && this.objectives.step() >= 3) {
-      const p = this.movement.getPosition();
-      const a = this.interiorAABB;
-      if (p.x >= a.minX && p.x <= a.maxX && p.z >= a.minZ && p.z <= a.maxZ) {
-        this.entered = true;
-        this.objectives.advanceTo(4);
+  openDoor() {
+    if (this.doorState === 'opening' || this.doorState === 'open') return;
+    this.doorState = 'opening';
+    this.doorRotTarget = Math.PI / 2;
+  }
+
+  _setDoorColliderClosed(closed) {
+    if (closed) {
+      const halfDoor = this.doorW / 2;
+      const t = this.wallT / 2 + 0.05;
+      this.doorCollider.minX = this.cx - halfDoor;
+      this.doorCollider.maxX = this.cx + halfDoor;
+      this.doorCollider.minZ = this.cz + this.d / 2 - t;
+      this.doorCollider.maxZ = this.cz + this.d / 2 + t;
+    } else {
+      this.doorCollider.minX = 1e6;
+      this.doorCollider.maxX = 1e6 + 1;
+      this.doorCollider.minZ = 1e6;
+      this.doorCollider.maxZ = 1e6 + 1;
+    }
+  }
+
+  update(dt) {
+    // Trigger seal on first entry.
+    if (this.doorState === 'open' && this.isPlayerInside()) {
+      this._sealDoor();
+    }
+
+    // Animate door rotation toward target.
+    if (this.doorState === 'closing' || this.doorState === 'opening') {
+      const cur = this.doorHinge.rotation.y;
+      const k = 1 - Math.exp(-dt * 4); // exponential ease toward target
+      const next = cur + (this.doorRotTarget - cur) * k;
+      this.doorHinge.rotation.y = next;
+
+      if (Math.abs(next - this.doorRotTarget) < 0.01) {
+        this.doorHinge.rotation.y = this.doorRotTarget;
+        if (this.doorState === 'closing') {
+          this.doorState = 'closed';
+          this._setDoorColliderClosed(true);
+        } else {
+          this.doorState = 'open';
+          this._setDoorColliderClosed(false);
+        }
       }
     }
 
-    // Shard idle: gentle bob + slow rotate so it reads as "alive".
-    this.shard.rotation.y += dt * 0.6;
-    if (!this.shardActivated) {
-      this.shard.position.y = this.shardStartPos.y + Math.sin(t * 1.2) * 0.015;
-    } else {
-      // Activation: lerp from desk to chest-height hover, ease-out.
-      const elapsed = (now - this.shardActivatedAt) / 1000;
-      const lift = smoothstep(0, 1.5, elapsed);
-      const bob = lift * Math.sin(t * 1.6) * 0.06;
-      this.shard.position.lerpVectors(this.shardStartPos, this.shardHoverPos, lift);
-      this.shard.position.y += bob;
-      // Brief brightness flare on activation that decays into a steady glow.
-      const flare = Math.exp(-elapsed * 1.2);
-      this.shard.material.emissiveIntensity = 1.0 + flare * 1.8;
-      this.shardLight.intensity = 0.7 + flare * 1.6;
-    }
-    // Shard light always tracks the shard so the glow follows it as it lifts.
-    this.shardLight.position.copy(this.shard.position);
-
-    // Wall rune: subtle ambient pulse, plus a brighter flare-and-decay
-    // when clicked.
-    const basePulse = 0.75 + Math.sin(t * 1.0) * 0.12;
-    let flash = 0;
-    if (this.runeFlashAt) {
-      const since = (now - this.runeFlashAt) / 1000;
-      flash = Math.max(0, Math.exp(-since * 2.2)) * 0.6;
-      if (since > 2.5) this.runeFlashAt = 0;
-    }
-    this.runeSigil.material.opacity = Math.min(1, basePulse + flash);
+    // Ember flicker.
+    const t = performance.now() * 0.001;
+    this.ember.intensity = 0.45 + Math.sin(t * 3.7) * 0.08 + Math.sin(t * 7.3) * 0.05;
   }
-}
-
-// Procedural rune texture — drawn once via canvas, used as the sigil's
-// alpha-bearing color map. A circle, an inner triangle, and a center mark
-// read as "occult symbol" without committing to anything specific.
-function makeRuneTexture() {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, size, size);
-
-  ctx.strokeStyle = '#ffffff';
-  ctx.fillStyle = '#ffffff';
-  ctx.lineWidth = 6;
-  ctx.lineCap = 'round';
-
-  const c = size / 2;
-
-  // Outer circle
-  ctx.beginPath();
-  ctx.arc(c, c, c - 24, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Inner triangle (apex up)
-  const tr = c - 56;
-  ctx.beginPath();
-  ctx.moveTo(c, c - tr);
-  ctx.lineTo(c + tr * 0.866, c + tr * 0.5);
-  ctx.lineTo(c - tr * 0.866, c + tr * 0.5);
-  ctx.closePath();
-  ctx.stroke();
-
-  // Inner center dot
-  ctx.beginPath();
-  ctx.arc(c, c, 10, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Three short tick marks pointing inward, evenly placed on the circle
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
-    const x1 = c + Math.cos(angle) * (c - 24);
-    const y1 = c + Math.sin(angle) * (c - 24);
-    const x2 = c + Math.cos(angle) * (c - 50);
-    const y2 = c + Math.sin(angle) * (c - 50);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }

@@ -15,6 +15,7 @@ import { River } from '../features/River.js';
 import { PathToCabin } from '../features/PathToCabin.js';
 import { RuneTrail } from '../features/RuneTrail.js';
 import { Cabin } from '../features/Cabin.js';
+import { CabinInterior } from '../features/CabinInterior.js';
 import { DistantShapes } from '../features/DistantShapes.js';
 import { HiddenCube } from '../features/HiddenCube.js';
 import { MysticalPillar } from '../features/MysticalPillar.js';
@@ -59,10 +60,16 @@ export class Game {
     // so construct those first and pass them through.
     const distantShapes = new DistantShapes(this.scene);
     const runeTrail = new RuneTrail(this.scene);
-    const cabin = new Cabin(
-      this.scene, this.interaction, this.movement, this.objectives, runeTrail,
-    );
-    this.movement.addColliders(cabin.getColliders());
+    const cabin = new Cabin(this.scene, this.movement);
+    const cabinInterior = new CabinInterior({
+      scene: this.scene,
+      cabin,
+      interaction: this.interaction,
+      journal: this.journal,
+      inspect: this.inspect,
+      save: this.save,
+      onSolved: () => runeTrail.reveal?.(),
+    });
 
     this.features = [
       new Forest(this.scene, { exclusions }),
@@ -72,6 +79,7 @@ export class Game {
       distantShapes,
       runeTrail,
       cabin,
+      cabinInterior,
       new HiddenCube(this.scene, this.interaction, this.movement, this.objectives),
       new MysticalPillar(this.scene, this.interaction, this.world, this.objectives),
       new PortalZone(this.scene, this.movement, this.world),
