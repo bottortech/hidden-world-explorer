@@ -2,17 +2,17 @@ import * as THREE from 'three';
 import { Clue } from './Clue.js';
 import { ComboLock } from './ComboLock.js';
 
-// Room 2 (Attic) shell. Sealed-room geometry placed far from the cabin in
-// world coordinates so the two rooms can coexist in the same scene without
-// the player ever walking between them — transitions teleport instead.
+// Room 2: dusty attic. Sealed-room geometry placed far from the cabin in
+// world coordinates so both rooms can coexist; transitions teleport the
+// player between them.
 //
-// This pass scaffolds the room: walls/floor/roof, a single sloped beam, a
-// dim warm bulb, a door with a combo lock, and one placeholder crate prop
-// to verify the clue/inspect pipeline. Real attic content (boxes, photo
-// albums, toys, hidden compartments) lands in a follow-up.
+// Solution: "MAP"
+//   Music box     → M    ("Property of *M*ariel")
+//   Folded map    → A    ("*A*shwood County")
+//   Postcard      → P    ("Dear *P*apa")
 //
-// Placeholder solution: "OUT" — the crate's flavor text emphasizes one
-// letter so a player can immediately validate the lock works.
+// Plus an order hint ("First the music. Then the road. Then the message.")
+// and three lore props: wooden train, hat box, stack of newspapers.
 export class Attic {
   constructor({
     scene, movement, interaction, journal, inspect, save, onSolved,
@@ -101,45 +101,183 @@ export class Attic {
     movement.addColliders([this.doorCollider]);
     this._setDoorColliderClosed(true);
 
-    // Wall colliders
     movement.addColliders(this._wallColliders());
 
-    // Warm bulb hanging from a rafter — main light source.
-    const bulbLight = new THREE.PointLight(0xffd095, 2.6, 9, 1.3);
-    bulbLight.position.set(this.cx, this.cy + this.h - 0.55, this.cz);
-    this.group.add(bulbLight);
-    this.bulbLight = bulbLight;
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.08, 12, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffe3a0, fog: false }),
-    );
-    bulb.position.copy(bulbLight.position);
-    this.group.add(bulb);
+    // --- Lighting -------------------------------------------------------------
+    // Two warm bulbs hanging from rafters cover the long axis; a violet fill
+    // and a candle on the workbench keep corners legible.
+    const bulb1 = new THREE.PointLight(0xffd095, 4.0, 12, 1.1);
+    bulb1.position.set(this.cx - 1.8, this.cy + this.h - 0.55, this.cz);
+    this.group.add(bulb1);
+    const bulb2 = new THREE.PointLight(0xffd095, 4.0, 12, 1.1);
+    bulb2.position.set(this.cx + 1.8, this.cy + this.h - 0.55, this.cz);
+    this.group.add(bulb2);
+    this.bulbLights = [bulb1, bulb2];
+    for (const b of this.bulbLights) {
+      const bulbMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 12, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffe3a0, fog: false }),
+      );
+      bulbMesh.position.copy(b.position);
+      this.group.add(bulbMesh);
+    }
 
-    // Subtle violet fill so far corners don't crush.
-    const fill = new THREE.PointLight(0x6a4a78, 0.5, 9, 1.4);
+    // Violet fill so corners aren't crushed
+    const fill = new THREE.PointLight(0x6a4a78, 0.9, 12, 1.4);
     fill.position.set(this.cx, this.cy + 1.0, this.cz);
     this.group.add(fill);
 
-    // --- Placeholder prop: dusty crate ---------------------------------------
-    const crateMat = new THREE.MeshStandardMaterial({
-      color: 0x4a3220, emissive: 0x9a6a3a, emissiveIntensity: 0.4, roughness: 1,
-    });
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), crateMat);
-    crate.position.set(this.cx + 1.2, this.cy + 0.25, this.cz - 0.6);
-    this.group.add(crate);
-    this.crateMat = crateMat;
+    // Window-light fake: a soft blue rectangle of light from "outside" through
+    // the small window we'll add on the north wall.
+    const windowGlow = new THREE.PointLight(0x8aa6c8, 1.2, 6, 1.3);
+    windowGlow.position.set(this.cx, this.cy + 1.6, this.cz - halfD + 0.4);
+    this.group.add(windowGlow);
+
+    // --- Window on north wall (visual only) -----------------------------------
+    const windowFrame = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.0, 0.7),
+      new THREE.MeshBasicMaterial({ color: 0x9ab4d6, fog: false, side: THREE.DoubleSide }),
+    );
+    windowFrame.position.set(this.cx, this.cy + 1.7, this.cz - halfD + 0.01);
+    this.group.add(windowFrame);
+
+    // --- Workbench against the east wall --------------------------------------
+    const benchMat = new THREE.MeshStandardMaterial({ color: 0x3d2a1c, roughness: 1 });
+    const benchTop = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.06, 2.4), benchMat,
+    );
+    const benchX = this.cx + halfW - 0.4;
+    const benchZ = this.cz;
+    benchTop.position.set(benchX, this.cy + 0.78, benchZ);
+    this.group.add(benchTop);
+    for (const dz of [-1.05, 1.05]) {
+      const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.78, 0.07), benchMat,
+      );
+      leg.position.set(benchX, this.cy + 0.39, benchZ + dz);
+      this.group.add(leg);
+    }
+    const benchTop_y = this.cy + 0.81;
+
+    // Candle on the workbench (extra local light + atmosphere)
+    const wax = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.045, 0.18, 12),
+      new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.85 }),
+    );
+    wax.position.set(benchX, benchTop_y + 0.09, benchZ - 0.9);
+    this.group.add(wax);
+    const flame = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.04, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffe0a0, fog: false }),
+    );
+    flame.scale.set(1, 1.6, 1);
+    flame.position.set(benchX, benchTop_y + 0.22, benchZ - 0.9);
+    this.group.add(flame);
+    this.candleFlame = flame;
+    this.candleLight = new THREE.PointLight(0xffc878, 1.8, 4.5, 1.4);
+    this.candleLight.position.copy(flame.position);
+    this.group.add(this.candleLight);
 
     const inside = () => this.isPlayerInside();
+    const playerName = save.displayPlayerName();
 
+    // --- Order hint: chalk note pinned to the workbench wall ------------------
+    const noteMesh = makeNoteMesh();
+    noteMesh.position.set(benchX - 0.3, benchTop_y + 0.005, benchZ - 0.4);
+    noteMesh.rotation.y = -0.15;
+    this.group.add(noteMesh);
     new Clue(interaction, journal, inspect, {
-      id: 'attic-crate',
-      title: 'A dusty wooden crate',
+      id: 'attic-note',
+      title: 'A scrap pinned to the wall',
+      body: 'Childlike letters in chalk-blue pencil:\n\n  "First the music. Then the road. Then the message."',
+      location: 'Attic · workbench',
+      object: noteMesh,
+      gate: inside,
+    });
+
+    // --- Clue M: music box ----------------------------------------------------
+    const musicBox = makeMusicBoxMesh();
+    musicBox.position.set(benchX - 0.05, benchTop_y + 0.06, benchZ + 0.0);
+    musicBox.rotation.y = -0.2;
+    this.group.add(musicBox);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-music',
+      title: 'A small music box',
+      body: 'Mahogany, latch tarnished. A brass plate is screwed to the lid:\n\n  Property of *M*ariel\n\nYou wind the crank a half-turn. A few notes stagger out, then nothing.',
+      location: 'Attic · workbench',
+      object: musicBox,
+      gate: inside,
+    });
+
+    // --- Clue A: folded map ---------------------------------------------------
+    const folded = makeFoldedMapMesh();
+    folded.position.set(benchX - 0.05, benchTop_y + 0.018, benchZ + 0.55);
+    folded.rotation.y = 0.18;
+    this.group.add(folded);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-map',
+      title: 'A folded county map',
+      body: 'Brittle along the creases. The cover is stamped in faded ink:\n\n  *A*shwood County — Surveyors\' Edition\n\nMost of the interior is taken up by a road grid; one route is traced over twice in red.',
+      location: 'Attic · workbench',
+      object: folded,
+      gate: inside,
+    });
+
+    // --- Clue P: postcard -----------------------------------------------------
+    const postcard = makePostcardMesh();
+    postcard.position.set(benchX - 0.05, benchTop_y + 0.012, benchZ + 1.0);
+    postcard.rotation.y = 0.05;
+    this.group.add(postcard);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-postcard',
+      title: 'A faded postcard',
       body:
-        'Stencilled on the side, half-rubbed off:\n\n  HOLD WI*T*H CARE — DO NOT OPEN\n\n' +
-        'Heavy. Whatever\'s inside shifts when you nudge it.',
+        'A picture of a long pier on the front. The handwritten side reads:\n\n' +
+        `  Sent to: ${playerName}\n\n` +
+        '  "Dear *P*apa,\n   the cabin is locked up tight. We won\'t go back. — A."',
+      location: 'Attic · workbench',
+      object: postcard,
+      gate: inside,
+    });
+
+    // --- Lore: wooden train (floor near west wall) ----------------------------
+    const train = makeTrainMesh();
+    train.position.set(this.cx - 1.6, this.cy + 0.06, this.cz + 0.4);
+    train.rotation.y = 0.6;
+    this.group.add(train);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-train',
+      title: 'A toy locomotive',
+      body: 'Painted wood, paint chipped at the corners. The smokestack rattles when you tip it. There\'s no track up here for it to run on.',
       location: 'Attic · floor',
-      object: crate,
+      object: train,
+      gate: inside,
+    });
+
+    // --- Lore: hat box (floor, NW corner) ------------------------------------
+    const hatbox = makeHatboxMesh();
+    hatbox.position.set(this.cx - halfW + 0.6, this.cy + 0.18, this.cz - halfD + 0.5);
+    this.group.add(hatbox);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-hatbox',
+      title: 'A round hat box',
+      body: 'The lid is laced shut with twine. You don\'t want to disturb it. A faded shipping tag hangs off the side, the address worn smooth.',
+      location: 'Attic · NW corner',
+      object: hatbox,
+      gate: inside,
+    });
+
+    // --- Lore: stack of newspapers -------------------------------------------
+    const newsStack = makeNewspaperStack();
+    newsStack.position.set(this.cx + 0.4, this.cy + 0.05, this.cz + halfD - 0.7);
+    newsStack.rotation.y = -0.18;
+    this.group.add(newsStack);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-newspapers',
+      title: 'A stack of newspapers',
+      body: 'All folded the same way, stacked neatly. The top one is dated decades back. A headline is half-visible: SEARCH CALLED OFF — NO TRACE FOUND.',
+      location: 'Attic · floor',
+      object: newsStack,
       gate: inside,
     });
 
@@ -159,7 +297,7 @@ export class Attic {
     new ComboLock(interaction, inspect, save, {
       id: 'attic',
       object: lockMount,
-      solution: 'OUT',
+      solution: 'MAP',
       gate: inside,
       onSolved: () => onSolved?.(),
     });
@@ -239,10 +377,129 @@ export class Attic {
       }
     }
 
-    // Bulb sway / flicker
     const t = performance.now() * 0.001;
-    if (this.bulbLight) {
-      this.bulbLight.intensity = 2.5 + Math.sin(t * 2.3) * 0.18;
+    if (this.bulbLights) {
+      const flicker = Math.sin(t * 2.3) * 0.18 + Math.sin(t * 5.1) * 0.08;
+      this.bulbLights[0].intensity = 4.0 + flicker;
+      this.bulbLights[1].intensity = 4.0 - flicker;
+    }
+    if (this.candleLight) {
+      const f = 1.7 + Math.sin(t * 9.1) * 0.2 + Math.sin(t * 4.3) * 0.14;
+      this.candleLight.intensity = f;
+      this.candleFlame.scale.y = 1.55 + Math.sin(t * 11.0) * 0.2;
     }
   }
+}
+
+// --- Prop mesh factories ----------------------------------------------------
+
+function makeNoteMesh() {
+  const group = new THREE.Group();
+  const paper = new THREE.MeshStandardMaterial({
+    color: 0xd9c9b1, emissive: 0x6a4f30, emissiveIntensity: 0.7, roughness: 1,
+  });
+  const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.005, 0.16), paper);
+  group.add(sheet);
+  return group;
+}
+
+function makeMusicBoxMesh() {
+  const wood = new THREE.MeshStandardMaterial({
+    color: 0x6a3a1c, emissive: 0xa86a30, emissiveIntensity: 0.45, roughness: 0.85,
+  });
+  const brass = new THREE.MeshStandardMaterial({
+    color: 0xc89a4a, roughness: 0.5, metalness: 0.4,
+  });
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.18), wood);
+  group.add(body);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.02, 0.19), wood);
+  lid.position.y = 0.07;
+  group.add(lid);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.005, 0.06), brass);
+  plate.position.y = 0.085;
+  group.add(plate);
+  const crank = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.06, 8), brass);
+  crank.rotation.z = Math.PI / 2;
+  crank.position.set(0.13, 0.0, 0);
+  group.add(crank);
+  return group;
+}
+
+function makeFoldedMapMesh() {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xbfa888, emissive: 0x8a6a3a, emissiveIntensity: 0.45, roughness: 1,
+  });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.018, 0.22), mat);
+  return m;
+}
+
+function makePostcardMesh() {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xd9b88a, emissive: 0xa86a3a, emissiveIntensity: 0.45, roughness: 1,
+  });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.005, 0.13), mat);
+  return m;
+}
+
+function makeTrainMesh() {
+  const red = new THREE.MeshStandardMaterial({
+    color: 0x782a1a, emissive: 0x4a1a10, emissiveIntensity: 0.4, roughness: 0.85,
+  });
+  const black = new THREE.MeshStandardMaterial({ color: 0x1a1410, roughness: 0.9 });
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.10, 0.10), red);
+  body.position.y = 0.08;
+  group.add(body);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, 0.10), red);
+  cab.position.set(-0.06, 0.18, 0);
+  group.add(cab);
+  const stack = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.08, 12), black,
+  );
+  stack.position.set(0.07, 0.18, 0);
+  group.add(stack);
+  for (const [x, z] of [[-0.07, 0.06], [0.07, 0.06], [-0.07, -0.06], [0.07, -0.06]]) {
+    const wheel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12), black,
+    );
+    wheel.rotation.x = Math.PI / 2;
+    wheel.position.set(x, 0.04, z);
+    group.add(wheel);
+  }
+  return group;
+}
+
+function makeHatboxMesh() {
+  const cream = new THREE.MeshStandardMaterial({
+    color: 0xc8b894, emissive: 0x6a5a3a, emissiveIntensity: 0.4, roughness: 1,
+  });
+  const ribbon = new THREE.MeshStandardMaterial({ color: 0x7a3a4a, roughness: 0.9 });
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.32, 24), cream);
+  group.add(body);
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.04, 24), cream);
+  lid.position.y = 0.18;
+  group.add(lid);
+  const ribbon1 = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.02, 0.04), ribbon);
+  ribbon1.position.y = 0.185;
+  group.add(ribbon1);
+  const ribbon2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.62), ribbon);
+  ribbon2.position.y = 0.185;
+  group.add(ribbon2);
+  return group;
+}
+
+function makeNewspaperStack() {
+  const paper = new THREE.MeshStandardMaterial({
+    color: 0xc8b894, emissive: 0x4a3a28, emissiveIntensity: 0.35, roughness: 1,
+  });
+  const group = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.02, 0.24), paper);
+    sheet.position.y = 0.01 + i * 0.022;
+    sheet.rotation.y = (i - 2) * 0.04;
+    group.add(sheet);
+  }
+  return group;
 }

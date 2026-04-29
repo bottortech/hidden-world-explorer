@@ -121,16 +121,17 @@ export class Cabin {
     movement.addColliders(this._wallColliders());
 
     // --- Interior light -------------------------------------------------------
-    // Doubled in intensity and reach versus the original ambient-only build
-    // so a sealed, doorless room is actually readable. Decay lowered too,
-    // so the corners (chair, hearth, beam) aren't crushed black.
-    this.interiorLight = new THREE.PointLight(COLORS.warmLight, 3.2, 11, 1.2);
+    // Two warm lights at low decay so the whole sealed room is readable, plus
+    // a violet fill to keep the corners from crushing to black.
+    this.interiorLight = new THREE.PointLight(COLORS.warmLight, 4.5, 12, 1.0);
     this.interiorLight.position.set(this.cx, this.h - 0.5, this.cz);
     this.group.add(this.interiorLight);
 
-    // Soft localized fill so the deep corners aren't pitch-dark when the
-    // ceiling light is occluded by furniture.
-    const fill = new THREE.PointLight(0x6a4a78, 0.55, 9, 1.4);
+    const secondary = new THREE.PointLight(COLORS.warmLight, 2.2, 9, 1.0);
+    secondary.position.set(this.cx, this.h - 0.5, this.cz + 1.5);
+    this.group.add(secondary);
+
+    const fill = new THREE.PointLight(0x6a4a78, 1.2, 11, 1.4);
     fill.position.set(this.cx, 1.0, this.cz);
     this.group.add(fill);
 
