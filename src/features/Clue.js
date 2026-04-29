@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 // A discoverable clue placed in the world. Two flavors share one class:
 //   • Lore prop   — body is just narrative text. No emphasized letters.
 //   • Clue prop   — body contains one letter wrapped in asterisks (e.g.
@@ -101,12 +99,25 @@ const CSS = `
   display: inline-block;
   font-family: 'Georgia', 'Times New Roman', serif;
   font-weight: bold;
-  font-size: 1.85em;
-  color: #fff5dd;
-  text-shadow: 0 0 14px rgba(252, 220, 160, 0.95);
-  padding: 0 0.04em;
-  vertical-align: -0.06em;
+  font-size: 2.6em;
+  line-height: 0.9;
+  color: #ffd966;
+  text-shadow:
+    0 0 6px rgba(255, 217, 102, 1),
+    0 0 18px rgba(255, 180, 80, 0.85),
+    0 0 36px rgba(255, 140, 60, 0.55);
+  background: rgba(255, 200, 80, 0.10);
+  border-bottom: 2px solid rgba(255, 210, 110, 0.7);
+  padding: 0 0.12em 0.04em;
+  margin: 0 0.04em;
+  border-radius: 3px;
+  vertical-align: -0.18em;
   letter-spacing: 0.02em;
+  animation: glyph-pulse 2.2s ease-in-out infinite;
+}
+@keyframes glyph-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
 }
 `;
 
