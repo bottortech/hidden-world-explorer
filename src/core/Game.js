@@ -6,6 +6,7 @@ import { MovementSystem } from '../systems/MovementSystem.js';
 import { InteractionSystem } from '../systems/InteractionSystem.js';
 import { WorldSystem } from '../systems/WorldSystem.js';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
+import { SaveSystem } from '../systems/SaveSystem.js';
 import { Forest } from '../features/Forest.js';
 import { SceneDecor } from '../features/SceneDecor.js';
 import { River } from '../features/River.js';
@@ -36,6 +37,7 @@ export class Game {
     this.interaction = new InteractionSystem(this.camera, this.renderer.domElement);
     this.world = new WorldSystem(this.scene);
     this.objectives = new ObjectiveSystem();
+    this.save = new SaveSystem();
 
     // Exclusion zones — kept in one list so Forest, SceneDecor, and any
     // future scattered-prop feature carve the same clearings.
