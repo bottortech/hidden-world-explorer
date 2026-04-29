@@ -4,8 +4,6 @@ import { createCamera } from './Camera.js';
 import { createRenderer } from './Renderer.js';
 import { MovementSystem } from '../systems/MovementSystem.js';
 import { InteractionSystem } from '../systems/InteractionSystem.js';
-import { WorldSystem } from '../systems/WorldSystem.js';
-import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { JournalSystem } from '../systems/JournalSystem.js';
 import { InspectSystem } from '../systems/InspectSystem.js';
@@ -42,8 +40,6 @@ export class Game {
 
     this.movement = new MovementSystem(this.camera, this.renderer.domElement);
     this.interaction = new InteractionSystem(this.camera, this.renderer.domElement);
-    this.world = new WorldSystem(this.scene);
-    this.objectives = new ObjectiveSystem();
     this.journal = new JournalSystem(this.save, this.movement);
     this.inspect = new InspectSystem(this.movement);
     this.namePrompt = new NamePrompt(this.save);
@@ -160,8 +156,6 @@ export class Game {
 
     this.movement.update(dt);
     this.interaction.update(dt);
-    this.world.update(dt);
-    this.objectives.update(dt);
     for (const feature of this.features) feature.update?.(dt, this);
 
     this.renderer.render(this.scene, this.camera);

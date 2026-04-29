@@ -1,79 +1,39 @@
 import * as THREE from 'three';
 import { COLORS } from '../utils/colors.js';
 
-// Builds the base scene: sky gradient, fog, lights, ground.
-// Lights and the sky are named so WorldSystem can mutate them by name later.
+// Builds the base scene for the indoor escape rooms: dark void background
+// and three scene-level lights (ambient, directional, hemisphere) that
+// provide the soft fill on top of each room's own point lights. No sky,
+// no ground plane, no atmospheric fog — the rooms are sealed and the
+// player never sees the world outside their walls.
 export function createScene() {
   const scene = new THREE.Scene();
 
-  // Denser exponential fog gives the world layered depth.
-  scene.fog = new THREE.FogExp2(COLORS.fog, 0.055);
-  // Background matches the fog horizon for any rare gap behind the skydome.
-  scene.background = new THREE.Color(COLORS.skyHorizon);
+  // Pure void background — what shows through any gap should read as
+  // "nothing." Cabin and Attic are at distant world coordinates so a
+  // peek through a doorway pre-transition just shows black.
+  scene.background = new THREE.Color(0x05030a);
 
-  // Gradient skydome: shader interpolates topColor → bottomColor along world Y.
-  // bottomColor is kept in sync with fog by WorldSystem so the horizon dissolves.
-  const skyMat = new THREE.ShaderMaterial({
-    uniforms: {
-      topColor: { value: new THREE.Color(COLORS.skyTop) },
-      bottomColor: { value: new THREE.Color(COLORS.skyHorizon) },
-      exponent: { value: 0.55 },
-    },
-    vertexShader: `
-      varying vec3 vWorldPosition;
-      void main() {
-        vec4 worldPos = modelMatrix * vec4(position, 1.0);
-        vWorldPosition = worldPos.xyz;
-        gl_Position = projectionMatrix * viewMatrix * worldPos;
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 topColor;
-      uniform vec3 bottomColor;
-      uniform float exponent;
-      varying vec3 vWorldPosition;
-      void main() {
-        float h = normalize(vWorldPosition).y;
-        float t = pow(max(h, 0.0), exponent);
-        gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
-      }
-    `,
-    side: THREE.BackSide,
-    depthWrite: false,
-    depthTest: false,
-    fog: false,
-  });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), skyMat);
-  sky.name = 'sky';
-  sky.renderOrder = -1;
-  scene.add(sky);
+  // Light fog that approaches the void color, so any far surface fades
+  // gracefully instead of popping. Density is gentle.
+  scene.fog = new THREE.FogExp2(0x05030a, 0.035);
 
   // Ambient — warm violet undertone so shadow sides aren't flat black.
   const ambient = new THREE.AmbientLight(0x6a5878, 0.5);
   ambient.name = 'ambient';
   scene.add(ambient);
 
-  // Directional "moonlight" — cool lavender top-down.
-  const directional = new THREE.DirectionalLight(0xb89dd6, 0.55);
+  // Directional "moonlight" — cool lavender, top-down. Adds shape to walls.
+  const directional = new THREE.DirectionalLight(0xb89dd6, 0.45);
   directional.position.set(20, 30, 10);
   directional.name = 'directional';
   scene.add(directional);
 
-  // Hemisphere — purple sky / dark ground tint adds non-flat ambient variation.
-  const hemisphere = new THREE.HemisphereLight(0x6c5b7b, 0x1a1424, 0.45);
+  // Hemisphere — purple sky / dark ground tint adds non-flat ambient variation
+  // even in sealed rooms.
+  const hemisphere = new THREE.HemisphereLight(0x6c5b7b, 0x1a1424, 0.4);
   hemisphere.name = 'hemisphere';
   scene.add(hemisphere);
-
-  // Ground plane — generous size so the player never reaches its edge.
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: COLORS.ground,
-    roughness: 1,
-    metalness: 0,
-  });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.name = 'ground';
-  scene.add(ground);
 
   return scene;
 }
