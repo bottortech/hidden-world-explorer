@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Clue } from './Clue.js';
 import { ComboLock } from './ComboLock.js';
+import { Key } from './Key.js';
 
 // Room 2: dusty attic. Sealed-room geometry placed far from the cabin in
 // world coordinates so both rooms can coexist; transitions teleport the
@@ -15,7 +16,7 @@ import { ComboLock } from './ComboLock.js';
 // and three lore props: wooden train, hat box, stack of newspapers.
 export class Attic {
   constructor({
-    scene, movement, interaction, journal, inspect, save, onSolved,
+    scene, movement, interaction, journal, inspect, save, hand, onSolved,
     origin = [200, 0, 0],
   }) {
     this.movement = movement;
@@ -273,6 +274,38 @@ export class Attic {
       gate: inside,
     });
 
+    // --- Lore: phonograph on a small crate (NW area) -------------------------
+    const phonoCrate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.45, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 1 }),
+    );
+    phonoCrate.position.set(this.cx - halfW + 1.2, this.cy + 0.225, this.cz - halfD + 0.7);
+    this.group.add(phonoCrate);
+    const phono = makePhonographMesh();
+    phono.position.set(this.cx - halfW + 1.2, this.cy + 0.46, this.cz - halfD + 0.7);
+    phono.rotation.y = 0.3;
+    this.group.add(phono);
+    new Clue(interaction, journal, inspect, {
+      id: 'attic-phonograph',
+      title: 'A small phonograph',
+      body: 'Cabinet wood, brass horn dented at the lip. The crank is missing. A label pasted to the inside of the open lid is faded but legible:\n\n  "Property of Brand & Son — Ashwood."',
+      room: 'attic',
+      location: 'Attic · NW corner',
+      object: phono,
+      gate: inside,
+    });
+
+    // --- Atmosphere: stack of crates against the south wall (decoration) -----
+    const stack = makeCrateStack();
+    stack.position.set(this.cx + halfW - 1.0, this.cy, this.cz + halfD - 0.7);
+    this.group.add(stack);
+
+    // --- Atmosphere: a couple of hanging tools on the east wall (decoration) -
+    const tools = makeHangingTools();
+    tools.position.set(this.cx + halfW - this.wallT - 0.06, this.cy + 1.55, this.cz - 1.6);
+    tools.rotation.y = -Math.PI / 2;
+    this.group.add(tools);
+
     // --- Lore: stack of newspapers -------------------------------------------
     const newsStack = makeNewspaperStack();
     newsStack.position.set(this.cx + 0.4, this.cy + 0.05, this.cz + halfD - 0.7);
@@ -301,13 +334,28 @@ export class Attic {
     this.group.add(lockMount);
     this.lockMount = lockMount;
 
+    // --- Key spawned on lock solve -------------------------------------------
+    this.key = new Key({
+      scene,
+      interaction,
+      hand,
+      save,
+      roomId: 'attic',
+      position: [this.cx, this.cy + 1.05, this.cz + halfD - 0.32],
+      onCollected: () => onSolved?.(),
+    });
+
     new ComboLock(interaction, inspect, save, {
       id: 'attic',
       object: lockMount,
       solution: 'MAP',
       gate: inside,
-      onSolved: () => onSolved?.(),
+      onSolved: () => this.key.activate(),
     });
+
+    if (save.isRoomComplete('attic') && !save.hasKey('attic')) {
+      this.key.activate();
+    }
 
     this.interiorAABB = {
       minX: this.cx - halfW + 0.5,
@@ -395,6 +443,7 @@ export class Attic {
       this.candleLight.intensity = f;
       this.candleFlame.scale.y = 1.55 + Math.sin(t * 11.0) * 0.2;
     }
+    this.key?.update?.(dt);
   }
 }
 
@@ -494,6 +543,68 @@ function makeHatboxMesh() {
   const ribbon2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.62), ribbon);
   ribbon2.position.y = 0.185;
   group.add(ribbon2);
+  return group;
+}
+
+function makePhonographMesh() {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4a2a18, roughness: 0.9 });
+  const brass = new THREE.MeshStandardMaterial({
+    color: 0xc89a4a, emissive: 0x6a4a20, emissiveIntensity: 0.4, roughness: 0.45, metalness: 0.6,
+  });
+  const black = new THREE.MeshStandardMaterial({ color: 0x18120c, roughness: 1 });
+  const group = new THREE.Group();
+  const cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.32), wood);
+  cabinet.position.y = 0;
+  group.add(cabinet);
+  const platter = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 24), black);
+  platter.position.set(0, 0.086, 0);
+  group.add(platter);
+  const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.04, 0.34, 16, 1, true), brass);
+  horn.rotation.z = -Math.PI / 2;
+  horn.position.set(0.20, 0.18, 0);
+  group.add(horn);
+  return group;
+}
+
+function makeCrateStack() {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 1 });
+  const lighter = new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 1 });
+  const group = new THREE.Group();
+  const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), wood);
+  c1.position.set(0, 0.25, 0);
+  group.add(c1);
+  const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.45), lighter);
+  c2.position.set(0.05, 0.50 + 0.225, -0.05);
+  c2.rotation.y = 0.18;
+  group.add(c2);
+  const c3 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.4), wood);
+  c3.position.set(-0.5, 0.20, -0.1);
+  c3.rotation.y = -0.12;
+  group.add(c3);
+  return group;
+}
+
+function makeHangingTools() {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 1 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7, metalness: 0.6 });
+  const group = new THREE.Group();
+  const board = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.9), wood);
+  group.add(board);
+  // Hammer
+  const hammerHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.32, 8), wood);
+  hammerHandle.rotation.z = Math.PI / 2;
+  hammerHandle.position.set(0.04, 0.0, -0.30);
+  group.add(hammerHandle);
+  const hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.10), iron);
+  hammerHead.position.set(0.04, 0.0, -0.46);
+  group.add(hammerHead);
+  // Saw
+  const sawBlade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.10, 0.40), iron);
+  sawBlade.position.set(0.04, 0.10, 0.18);
+  group.add(sawBlade);
+  const sawHandle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.10), wood);
+  sawHandle.position.set(0.04, 0.10, -0.06);
+  group.add(sawHandle);
   return group;
 }
 

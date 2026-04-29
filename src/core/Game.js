@@ -11,6 +11,8 @@ import { JournalSystem } from '../systems/JournalSystem.js';
 import { InspectSystem } from '../systems/InspectSystem.js';
 import { NamePrompt } from '../systems/NamePrompt.js';
 import { RoomTransition } from '../systems/RoomTransition.js';
+import { HandSystem } from '../systems/HandSystem.js';
+import { KeyHud } from '../systems/KeyHud.js';
 import { Cabin } from '../features/Cabin.js';
 import { CabinInterior } from '../features/CabinInterior.js';
 import { Attic } from '../features/Attic.js';
@@ -46,6 +48,14 @@ export class Game {
     this.inspect = new InspectSystem(this.movement);
     this.namePrompt = new NamePrompt(this.save);
     this.transition = new RoomTransition(this.movement, this.camera);
+    this.hand = new HandSystem(this.camera);
+    this.keyHud = new KeyHud(this.save);
+
+    // Tap the hand on every interactable click for tactile feedback.
+    this.scene.add(this.camera); // ensure camera is in scene graph for hand child
+    this.renderer.domElement.addEventListener('click', () => {
+      if (this.interaction.currentEntry?.onClick) this.hand.tap();
+    });
 
     // Build all rooms up front. They live in disjoint world coordinates so
     // they can coexist; transitions teleport the player between them.
@@ -57,6 +67,7 @@ export class Game {
       journal: this.journal,
       inspect: this.inspect,
       save: this.save,
+      hand: this.hand,
       onSolved: () => this._onRoomSolved('cabin'),
     });
 
@@ -67,11 +78,12 @@ export class Game {
       journal: this.journal,
       inspect: this.inspect,
       save: this.save,
+      hand: this.hand,
       onSolved: () => this._onRoomSolved('attic'),
       origin: [200, 0, 0],
     });
 
-    this.features = [cabin, cabinInterior, attic];
+    this.features = [cabin, cabinInterior, attic, this.hand];
 
     window.addEventListener('resize', () => this.onResize());
     this.onResize();
@@ -106,6 +118,8 @@ export class Game {
       // transition shows the new room (empty) rather than the old one.
       this.journal.setCurrentRoom(next.id);
       await this.transition.advance(next.spawn);
+      // Fade the hand back in once the room is visible again.
+      this.hand.restoreIdle();
     } else {
       this._showEndCard();
     }

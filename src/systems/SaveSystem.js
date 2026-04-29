@@ -18,8 +18,12 @@ const EMPTY_STATE = () => ({
   playerName: null,
   completedRooms: [],
   discoveredClues: [],
+  collectedKeys: [], // roomIds whose key has been picked up
   rooms: {}, // per-room partial state, keyed by roomId
 });
+
+// The full game spans this many rooms; the final room consumes 5 keys.
+export const TOTAL_KEYS = 5;
 
 export class SaveSystem {
   constructor() {
@@ -101,6 +105,18 @@ export class SaveSystem {
     };
     this._persist();
   }
+
+  // Keys: one per room, accumulating toward TOTAL_KEYS. The final-room door
+  // consumes them.
+  hasKey(roomId) { return this.state.collectedKeys.includes(roomId); }
+  collectKey(roomId) {
+    if (this.hasKey(roomId)) return false;
+    this.state.collectedKeys = [...this.state.collectedKeys, roomId];
+    this._persist();
+    return true;
+  }
+  getKeyCount() { return this.state.collectedKeys.length; }
+  getKeyTotal() { return TOTAL_KEYS; }
 
   // Player identity. Empty submissions are stored as null and rendered as
   // 'UNKNOWN' so a future diegetic naming moment can overwrite cleanly.

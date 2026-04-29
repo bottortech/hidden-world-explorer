@@ -84,6 +84,37 @@ const CSS = `
   align-items: center;
   gap: 12px;
 }
+#${PANEL_ID} .keys-section {
+  margin: 0 0 18px 0;
+  padding: 12px 14px;
+  background: rgba(40, 28, 60, 0.5);
+  border: 1px solid rgba(184, 157, 214, 0.22);
+  border-radius: 4px;
+}
+#${PANEL_ID} .keys-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #b89dd6;
+  font-weight: normal;
+}
+#${PANEL_ID} .keys-section .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #d6c8ee;
+}
+#${PANEL_ID} .keys-section .row .glyph {
+  font-size: 16px;
+  filter: drop-shadow(0 0 6px rgba(252, 220, 130, 0.7));
+}
+#${PANEL_ID} .keys-section .list {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8e7ba8;
+}
 #${PANEL_ID} .clue .key-letter {
   font-size: 30px;
   color: #fff5dd;
@@ -241,10 +272,12 @@ export class JournalSystem {
       .filter((c) => !this.currentRoomId || c.room === this.currentRoomId);
     const headerCount = `${known.length} found`;
 
+    const keysHtml = this._keysSectionHtml();
     if (known.length === 0) {
       this.panel.innerHTML = `
         <h2>Journal</h2>
         <div class="hint">Press J to close · ${headerCount}</div>
+        ${keysHtml}
         <div class="empty">Nothing discovered yet.<br/>Look around.</div>
       `;
       return;
@@ -265,7 +298,27 @@ export class JournalSystem {
     this.panel.innerHTML = `
       <h2>Journal</h2>
       <div class="hint">Press J to close · ${headerCount}</div>
+      ${keysHtml}
       ${items}
+    `;
+  }
+
+  _keysSectionHtml() {
+    const have = this.save.getKeyCount();
+    const total = this.save.getKeyTotal();
+    const collected = this.save.state.collectedKeys;
+    const list = collected.length
+      ? `<div class="list">From: ${collected.map((id) => titleCase(id)).join(', ')}</div>`
+      : '';
+    return `
+      <div class="keys-section">
+        <h3>Keys</h3>
+        <div class="row">
+          <span class="glyph">🗝</span>
+          <span><strong>${have}</strong> of ${total} found</span>
+        </div>
+        ${list}
+      </div>
     `;
   }
 
@@ -282,4 +335,8 @@ function escapeHtml(s) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function titleCase(id) {
+  return id.charAt(0).toUpperCase() + id.slice(1);
 }

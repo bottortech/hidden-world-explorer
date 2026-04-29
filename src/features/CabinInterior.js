@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Clue } from './Clue.js';
 import { ComboLock } from './ComboLock.js';
+import { Key } from './Key.js';
 
 // Room 1's puzzle layout. Builds on Cabin's geometry anchors. Owns six props:
 //   • 4 clue items — desk note (order hint) + three prose clues whose body
@@ -15,7 +16,7 @@ import { ComboLock } from './ComboLock.js';
 // onSolved is fired when the lock yields. Game wires this to the room
 // transition so solving Room 1 fades into Room 2.
 export class CabinInterior {
-  constructor({ scene, cabin, interaction, journal, inspect, save, onSolved }) {
+  constructor({ scene, cabin, interaction, journal, inspect, save, hand, onSolved }) {
     this.cabin = cabin;
     this.glowMeshes = [];
 
@@ -135,6 +136,28 @@ export class CabinInterior {
       gate: inside,
     });
 
+    // --- Lore 3 (atmosphere): coat hung beside the door ----------------------
+    const coat = makeCoatMesh();
+    const halfD = cabin.d / 2;
+    coat.position.set(cabin.cx + halfW - 0.18, 1.45, cabin.cz + halfD - 0.6);
+    coat.rotation.y = -Math.PI / 2;
+    scene.add(coat);
+    new Clue(interaction, journal, inspect, {
+      id: 'cabin-coat',
+      title: 'A heavy oil-skin coat',
+      body: 'Hanging on a peg, half-stiff with cold. The collar is patched with a stitched square of plain cloth. Inside the lining, a strip of canvas reads:\n\n  "Brand & Son — riggers — Ashwood."\n\nThe pockets are empty.',
+      room: 'cabin',
+      location: 'Cabin · door peg',
+      object: coat,
+      gate: inside,
+    });
+
+    // --- Atmosphere: shelf with three jars (decoration only, not clickable) --
+    const shelfGroup = makeJarShelf();
+    shelfGroup.position.set(cabin.cx + halfW - this.cabin.wallT - 0.18, 1.85, cabin.cz - 0.5);
+    shelfGroup.rotation.y = -Math.PI / 2;
+    scene.add(shelfGroup);
+
     // --- Lock on the door ----------------------------------------------------
     const lockMount = new THREE.Mesh(
       new THREE.CircleGeometry(0.22, 24),
@@ -152,20 +175,38 @@ export class CabinInterior {
     scene.add(lockMount);
     this.lockMount = lockMount;
 
+    // --- Key spawned on lock solve -------------------------------------------
+    // Floats just in front of (and below) the lock disc, on the cabin-interior
+    // side, so the player can walk up and click it after solving.
+    const keyAnchor = cabin.doorInteriorAnchor;
+    this.key = new Key({
+      scene,
+      interaction,
+      hand,
+      save,
+      roomId: 'cabin',
+      position: [keyAnchor.x, keyAnchor.y - 0.18, keyAnchor.z - 0.25],
+      onCollected: () => onSolved?.(),
+    });
+
     new ComboLock(interaction, inspect, save, {
       id: 'cabin',
       object: lockMount,
       solution: 'ASH',
       gate: inside,
-      onSolved: () => onSolved?.(),
+      onSolved: () => this.key.activate(),
     });
+
+    // If the player previously solved the lock but didn't yet pick up the
+    // key (rare — would need to refresh between solve and pickup), offer
+    // the key on load so they aren't soft-locked.
+    if (save.isRoomComplete('cabin') && !save.hasKey('cabin')) {
+      this.key.activate();
+    }
   }
 
-  update() {
+  update(dt) {
     const t = performance.now() * 0.001;
-    // Slight pulse so prop edges catch the player's eye in dim light. The
-    // letter itself is hidden inside the prop's text — the prop just needs
-    // to be findable.
     const pulse = 0.92 + Math.sin(t * 1.3) * 0.08;
     for (const m of this.glowMeshes) {
       const mat = m.userData.glowMat ?? m.material;
@@ -174,6 +215,7 @@ export class CabinInterior {
     if (this.lockMount) {
       this.lockMount.material.opacity = 0.7 + Math.sin(t * 1.1) * 0.18;
     }
+    this.key?.update?.(dt);
   }
 }
 
@@ -247,5 +289,48 @@ function makePhotoMesh() {
   const surfaceMesh = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.28, 0.38), surface);
   surfaceMesh.position.x = 0.028;
   group.add(surfaceMesh);
+  return group;
+}
+
+function makeCoatMesh() {
+  const wool = new THREE.MeshStandardMaterial({ color: 0x2b2418, roughness: 1 });
+  const peg = new THREE.MeshStandardMaterial({ color: 0x1a120a, roughness: 0.9 });
+  const group = new THREE.Group();
+  const pegMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.10, 8), peg);
+  pegMesh.rotation.z = Math.PI / 2;
+  pegMesh.position.set(0, 0.45, 0);
+  group.add(pegMesh);
+  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.18, 0.06), wool);
+  shoulders.position.set(0, 0.30, 0);
+  group.add(shoulders);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.55, 0.05), wool);
+  body.position.set(0, -0.05, 0);
+  group.add(body);
+  return group;
+}
+
+function makeJarShelf() {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x3d2a1c, roughness: 1 });
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x6a5a4a, transparent: true, opacity: 0.55, roughness: 0.4, metalness: 0.1,
+  });
+  const lid = new THREE.MeshStandardMaterial({ color: 0x2a1f14, roughness: 0.9 });
+  const group = new THREE.Group();
+  const plank = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 1.2), wood);
+  group.add(plank);
+  for (let i = 0; i < 3; i++) {
+    const jar = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.045, 0.12, 12), glass,
+    );
+    jar.add(body);
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.046, 0.046, 0.02, 12), lid,
+    );
+    cap.position.y = 0.07;
+    jar.add(cap);
+    jar.position.set(0, 0.08, (i - 1) * 0.32);
+    group.add(jar);
+  }
   return group;
 }
