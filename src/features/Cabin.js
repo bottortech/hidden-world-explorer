@@ -8,18 +8,18 @@ import { COLORS } from '../utils/colors.js';
 // puzzle wiring (and vice versa).
 //
 // Door state machine:
-//   'open'    — initial. Doorway is clear.
-//   'closing' — auto-fired the first time the player crosses interiorAABB.
-//   'closed'  — collider blocks the doorway. Player is sealed in.
+//   'closed'  — initial (player spawns sealed inside). Collider blocks doorway.
 //   'opening' — fired by openDoor() (called from CabinInterior on dial solve).
-// All transitions are animated by lerp in update().
+//   'open'    — doorway clear. Initial state when startOpen is true (room
+//               already cleared in a prior session).
+// Transitions are animated by lerp in update().
 //
 // Public API used by CabinInterior:
 //   isPlayerInside(pos), getDoorAnchor(), openDoor()
 // Plus mounting points exposed as fields for placing puzzle props:
 //   deskTop, beamPos, hearthPos, chairTop, chairUnderside, doorInteriorAnchor
 export class Cabin {
-  constructor(scene, movement) {
+  constructor(scene, movement, { startOpen = false } = {}) {
     this.movement = movement;
 
     this.cx = 22;
@@ -103,15 +103,19 @@ export class Cabin {
       this.doorHinge.add(strap);
     }
 
-    // Door state. Rotation 0 = closed, +π/2 = open inward (into cabin).
-    this.doorState = 'open';
-    this.doorRotTarget = Math.PI / 2;
-    this.doorHinge.rotation.y = Math.PI / 2;
+    // Door state. Rotation 0 = closed, +π/2 = open outward.
+    // Player starts inside a sealed room (door closed) unless the room has
+    // already been cleared in a prior session, in which case the door is
+    // already open and the dial isn't needed.
+    this.doorState = startOpen ? 'open' : 'closed';
+    this.doorRotTarget = startOpen ? Math.PI / 2 : 0;
+    this.doorHinge.rotation.y = this.doorRotTarget;
 
     // Doorway-blocking collider. Mutated in place: real AABB when closed,
     // pushed off-grid when open (no allocations per frame).
     this.doorCollider = { minX: 1e6, maxX: 1e6 + 1, minZ: 1e6, maxZ: 1e6 + 1 };
     movement.addColliders([this.doorCollider]);
+    if (!startOpen) this._setDoorColliderClosed(true);
 
     // --- Wall colliders -------------------------------------------------------
     movement.addColliders(this._wallColliders());
@@ -229,13 +233,6 @@ export class Cabin {
     return p.x >= a.minX && p.x <= a.maxX && p.z >= a.minZ && p.z <= a.maxZ;
   }
 
-  // Auto-close on first interior entry. Idempotent.
-  _sealDoor() {
-    if (this.doorState !== 'open') return;
-    this.doorState = 'closing';
-    this.doorRotTarget = 0;
-  }
-
   openDoor() {
     if (this.doorState === 'opening' || this.doorState === 'open') return;
     this.doorState = 'opening';
@@ -259,11 +256,6 @@ export class Cabin {
   }
 
   update(dt) {
-    // Trigger seal on first entry.
-    if (this.doorState === 'open' && this.isPlayerInside()) {
-      this._sealDoor();
-    }
-
     // Animate door rotation toward target.
     if (this.doorState === 'closing' || this.doorState === 'opening') {
       const cur = this.doorHinge.rotation.y;

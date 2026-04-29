@@ -32,7 +32,17 @@ export class Game {
 
     this.renderer = createRenderer(container);
     this.scene = createScene();
-    this.camera = createCamera();
+
+    // Save state is read first so it can drive the player's initial spawn:
+    // mid-cabin facing the door if Room 1 hasn't been solved, just outside
+    // the cabin facing in if it has.
+    this.save = new SaveSystem();
+    const cabinCleared = this.save.isRoomComplete('cabin');
+    this.camera = createCamera(
+      cabinCleared
+        ? { position: [22, 1.7, -15], yaw: 0 }       // outside cabin, facing N
+        : { position: [22, 1.7, -23], yaw: Math.PI }, // inside cabin, facing S
+    );
 
     // Systems = generic, reusable behaviors (movement, raycasting, atmosphere,
     // objective HUD).
@@ -40,7 +50,6 @@ export class Game {
     this.interaction = new InteractionSystem(this.camera, this.renderer.domElement);
     this.world = new WorldSystem(this.scene);
     this.objectives = new ObjectiveSystem();
-    this.save = new SaveSystem();
     this.journal = new JournalSystem(this.save);
     this.inspect = new InspectSystem(this.movement);
 
@@ -60,7 +69,7 @@ export class Game {
     // so construct those first and pass them through.
     const distantShapes = new DistantShapes(this.scene);
     const runeTrail = new RuneTrail(this.scene);
-    const cabin = new Cabin(this.scene, this.movement);
+    const cabin = new Cabin(this.scene, this.movement, { startOpen: cabinCleared });
     const cabinInterior = new CabinInterior({
       scene: this.scene,
       cabin,
