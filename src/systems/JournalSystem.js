@@ -11,6 +11,8 @@
 // Already-discovered clues from a prior session show up in the panel as soon
 // as their feature registers (which happens during Game construction).
 
+import { bodyToHtml } from '../features/Clue.js';
+
 const PANEL_ID = 'journal-panel';
 const TOAST_ID = 'journal-toast';
 const STYLE_ID = 'journal-style';
@@ -82,10 +84,10 @@ const CSS = `
   align-items: center;
   gap: 12px;
 }
-#${PANEL_ID} .clue .glyph {
+#${PANEL_ID} .clue .key-letter {
   font-size: 30px;
   color: #fff5dd;
-  text-shadow: 0 0 10px rgba(252, 220, 160, 0.8);
+  text-shadow: 0 0 10px rgba(252, 220, 160, 0.85);
   line-height: 1;
   flex-shrink: 0;
   width: 36px;
@@ -218,10 +220,10 @@ export class JournalSystem {
       const inner = `
         <div class="title">${escapeHtml(c.title)}</div>
         ${c.location ? `<div class="loc">${escapeHtml(c.location)}</div>` : ''}
-        <div class="body">${escapeHtml(c.body ?? '')}</div>
+        <div class="body">${bodyToHtml(c.body)}</div>
       `;
-      const body = c.glyph
-        ? `<div class="row"><div class="glyph">${escapeHtml(c.glyph)}</div><div>${inner}</div></div>`
+      const body = c.keyLetter
+        ? `<div class="row"><div class="key-letter">${escapeHtml(c.keyLetter)}</div><div>${inner}</div></div>`
         : inner;
       return `<div class="clue">${body}</div>`;
     }).join('');

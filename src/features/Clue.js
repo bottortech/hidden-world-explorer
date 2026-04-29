@@ -1,25 +1,25 @@
 import * as THREE from 'three';
 
-// A discoverable clue placed in the world. Two variants:
-//   • Note clue   — a small folded paper / inscription. Inspect reveals text.
-//   • Glyph clue  — a glowing carved letter. Inspect reveals the character
-//                   itself (which the player will need for the door lock).
+// A discoverable clue placed in the world. Two flavors share one class:
+//   • Lore prop   — body is just narrative text. No emphasized letters.
+//   • Clue prop   — body contains one letter wrapped in asterisks (e.g.
+//                   "…dear *H*enry, in haste…"). The render emphasizes it
+//                   visually so the player notices it inside the prose.
 //
 // On first inspect, the clue is logged to the journal. Subsequent inspects
 // just re-open the same view (idempotent).
 //
-// `object` is the THREE.Object3D used for the in-world visual *and* the click
-// target. The caller is responsible for placing it in the scene tree.
-//
 //   new Clue(interaction, journal, inspect, {
-//     id: 'beam-glyph',
-//     title: 'Letter carved into the beam',
-//     body: 'A faint letter is etched into the underside of a beam.',
-//     location: 'Cabin · roof beam',
-//     glyph: 'A',                     // optional — turns this into a glyph clue
-//     object: glowingGlyphMesh,
+//     id: 'cabin-chair-letter',
+//     title: 'Folded letter under the chair',
+//     body: '…and so I write to you, dear *H*enry, in haste…',
+//     location: 'Cabin · chair',
+//     object: foldedLetterMesh,
 //     gate: () => playerInside(),     // optional — block click when false
 //   })
+
+const EMPHASIS_RE = /\*([^*\n])\*/;
+
 export class Clue {
   constructor(interaction, journal, inspect, config) {
     this.config = config;
@@ -31,7 +31,7 @@ export class Clue {
       title: config.title,
       body: config.body,
       location: config.location,
-      glyph: config.glyph,
+      keyLetter: extractKeyLetter(config.body),
     });
 
     interaction.add({
@@ -44,18 +44,34 @@ export class Clue {
   }
 
   _open() {
-    const { id, title, body, location, glyph } = this.config;
+    const { id, title, body, location } = this.config;
     this.inspect.enter({
-      render: () => renderClueView({ title, body, location, glyph }),
+      render: () => renderClueView({ title, body, location }),
       onClose: () => {},
     });
-    // Mark on open. Discover() is idempotent so reopening costs nothing.
     this.journal.discover(id);
   }
 
-  // No per-frame logic by default. Subclass / wrapper features can drive
-  // ambient glow on `config.object` via their own update().
   update() {}
+}
+
+// Pull the first emphasized letter out of a body string for journal display.
+// Returns null if the body has no `*X*` marker.
+export function extractKeyLetter(body) {
+  if (!body) return null;
+  const m = body.match(EMPHASIS_RE);
+  return m ? m[1].toUpperCase() : null;
+}
+
+// Convert a body string into HTML: escapes HTML, then replaces all `*X*`
+// markers with a glowing span.
+export function bodyToHtml(body) {
+  if (!body) return '';
+  let html = escapeHtml(body);
+  html = html.replace(/\*([^*\n])\*/g, '<span class="glyph-em">$1</span>');
+  // Preserve double newlines as paragraph breaks; single newlines as <br>.
+  html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+  return `<p>${html}</p>`;
 }
 
 const STYLE_ID = 'clue-style';
@@ -74,21 +90,23 @@ const CSS = `
   letter-spacing: 0.16em;
   margin-bottom: 18px;
 }
-.clue-view .glyph {
-  font-size: 132px;
-  text-align: center;
-  color: #fff5dd;
-  text-shadow: 0 0 24px rgba(252, 220, 160, 0.85);
-  margin: 8px 0 18px;
-  line-height: 1;
-  font-family: 'Georgia', 'Times New Roman', serif;
-  letter-spacing: 0.04em;
-}
 .clue-view .body {
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: #d6c8ee;
-  white-space: pre-wrap;
+}
+.clue-view .body p { margin: 0 0 14px 0; }
+.clue-view .body p:last-child { margin-bottom: 0; }
+.glyph-em {
+  display: inline-block;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-weight: bold;
+  font-size: 1.85em;
+  color: #fff5dd;
+  text-shadow: 0 0 14px rgba(252, 220, 160, 0.95);
+  padding: 0 0.04em;
+  vertical-align: -0.06em;
+  letter-spacing: 0.02em;
 }
 `;
 
@@ -100,16 +118,17 @@ function ensureStyle() {
   document.head.appendChild(el);
 }
 
-function renderClueView({ title, body, location, glyph }) {
-  ensureStyle();
+// Inject at import time so .glyph-em is available wherever bodyToHtml is
+// rendered (e.g. the journal panel) without requiring a clue inspect first.
+ensureStyle();
+
+function renderClueView({ title, body, location }) {
   const root = document.createElement('div');
   root.className = 'clue-view';
-  const glyphHtml = glyph ? `<div class="glyph">${escapeHtml(glyph)}</div>` : '';
   root.innerHTML = `
     <h2>${escapeHtml(title)}</h2>
     ${location ? `<div class="loc">${escapeHtml(location)}</div>` : ''}
-    ${glyphHtml}
-    <div class="body">${escapeHtml(body ?? '')}</div>
+    <div class="body">${bodyToHtml(body)}</div>
   `;
   return root;
 }
@@ -121,38 +140,4 @@ function escapeHtml(s) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-}
-
-// Helper: build a small in-world carved-glyph mesh (a glowing letter on a
-// plane). Used by CabinInterior and other rooms when the character is the
-// clue itself.
-export function makeGlyphCarvingMesh(char, { color = 0xfde7b3, size = 0.5 } = {}) {
-  const tex = makeGlyphTexture(char);
-  const mat = new THREE.MeshBasicMaterial({
-    map: tex,
-    color,
-    transparent: true,
-    opacity: 0.95,
-    fog: false,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
-}
-
-function makeGlyphTexture(char) {
-  const px = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = px;
-  const g = c.getContext('2d');
-  g.clearRect(0, 0, px, px);
-  g.fillStyle = '#ffffff';
-  g.font = 'bold 200px Georgia, "Times New Roman", serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(char, px / 2, px / 2 + 12);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
 }

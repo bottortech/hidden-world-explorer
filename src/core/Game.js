@@ -9,22 +9,22 @@ import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { JournalSystem } from '../systems/JournalSystem.js';
 import { InspectSystem } from '../systems/InspectSystem.js';
-import { Forest } from '../features/Forest.js';
-import { SceneDecor } from '../features/SceneDecor.js';
-import { River } from '../features/River.js';
-import { PathToCabin } from '../features/PathToCabin.js';
-import { RuneTrail } from '../features/RuneTrail.js';
+import { NamePrompt } from '../systems/NamePrompt.js';
+import { RoomTransition } from '../systems/RoomTransition.js';
 import { Cabin } from '../features/Cabin.js';
 import { CabinInterior } from '../features/CabinInterior.js';
-import { DistantShapes } from '../features/DistantShapes.js';
-import { HiddenCube } from '../features/HiddenCube.js';
-import { MysticalPillar } from '../features/MysticalPillar.js';
-import { PortalZone } from '../features/PortalZone.js';
-import { MysteryZone } from '../features/MysteryZone.js';
+import { Attic } from '../features/Attic.js';
 
-// Top-level orchestrator. Owns the renderer/scene/camera, wires systems, and
-// holds the list of features. To add a new feature: implement a class with
-// (optional) `update(dt, game)` and push it into `this.features`.
+// Linear room sequence. Each room knows where to spawn the player on entry.
+// To add another room, append an entry here and construct the matching
+// feature inside the Game constructor.
+const ROOM_SEQUENCE = [
+  { id: 'cabin', spawn: { position: [22, 1.7, -23], yaw: Math.PI } },
+  { id: 'attic', spawn: { position: [200, 1.7, 1.4], yaw: Math.PI } },
+];
+
+// Top-level orchestrator. Builds the scene/camera/renderer/systems, the
+// linear room features, and wires room-to-room transitions on solve.
 export class Game {
   constructor(container) {
     this.container = container;
@@ -33,43 +33,23 @@ export class Game {
     this.renderer = createRenderer(container);
     this.scene = createScene();
 
-    // Save state is read first so it can drive the player's initial spawn:
-    // mid-cabin facing the door if Room 1 hasn't been solved, just outside
-    // the cabin facing in if it has.
     this.save = new SaveSystem();
-    const cabinCleared = this.save.isRoomComplete('cabin');
-    this.camera = createCamera(
-      cabinCleared
-        ? { position: [22, 1.7, -15], yaw: 0 }       // outside cabin, facing N
-        : { position: [22, 1.7, -23], yaw: Math.PI }, // inside cabin, facing S
-    );
+    const startRoom = determineStartRoom(this.save);
+    const initialSpawn = startRoom?.spawn ?? ROOM_SEQUENCE[0].spawn;
+    this.camera = createCamera(initialSpawn);
 
-    // Systems = generic, reusable behaviors (movement, raycasting, atmosphere,
-    // objective HUD).
     this.movement = new MovementSystem(this.camera, this.renderer.domElement);
     this.interaction = new InteractionSystem(this.camera, this.renderer.domElement);
     this.world = new WorldSystem(this.scene);
     this.objectives = new ObjectiveSystem();
     this.journal = new JournalSystem(this.save);
     this.inspect = new InspectSystem(this.movement);
+    this.namePrompt = new NamePrompt(this.save);
+    this.transition = new RoomTransition(this.movement, this.camera);
 
-    // Exclusion zones — kept in one list so Forest, SceneDecor, and any
-    // future scattered-prop feature carve the same clearings.
-    const exclusions = [
-      // Cabin clearing
-      { type: 'circle', cx: 22, cz: -22, r: 12 },
-      // River strip (centered on x = -7, width 4 + small buffer)
-      { type: 'aabb', minX: -10, maxX: -4, minZ: -55, maxZ: 55 },
-      // Bridge approach — keep it walkable on both banks
-      { type: 'circle', cx: -7, cz: 4, r: 5 },
-    ];
-
-    // Features = game content built on top of systems. Some are referenced
-    // by other features (RuneTrail by Cabin, DistantShapes by MysteryZone),
-    // so construct those first and pass them through.
-    const distantShapes = new DistantShapes(this.scene);
-    const runeTrail = new RuneTrail(this.scene);
-    const cabin = new Cabin(this.scene, this.movement, { startOpen: cabinCleared });
+    // Build all rooms up front. They live in disjoint world coordinates so
+    // they can coexist; transitions teleport the player between them.
+    const cabin = new Cabin(this.scene, this.movement);
     const cabinInterior = new CabinInterior({
       scene: this.scene,
       cabin,
@@ -77,28 +57,70 @@ export class Game {
       journal: this.journal,
       inspect: this.inspect,
       save: this.save,
-      onSolved: () => runeTrail.reveal?.(),
+      onSolved: () => this._onRoomSolved('cabin'),
     });
 
-    this.features = [
-      new Forest(this.scene, { exclusions }),
-      new SceneDecor(this.scene, { exclusions }),
-      new River(this.scene),
-      new PathToCabin(this.scene),
-      distantShapes,
-      runeTrail,
-      cabin,
-      cabinInterior,
-      new HiddenCube(this.scene, this.interaction, this.movement, this.objectives),
-      new MysticalPillar(this.scene, this.interaction, this.world, this.objectives),
-      new PortalZone(this.scene, this.movement, this.world),
-      new MysteryZone(this.scene, this.movement, this.world, distantShapes, this.objectives),
-    ];
+    const attic = new Attic({
+      scene: this.scene,
+      movement: this.movement,
+      interaction: this.interaction,
+      journal: this.journal,
+      inspect: this.inspect,
+      save: this.save,
+      onSolved: () => this._onRoomSolved('attic'),
+      origin: [200, 0, 0],
+    });
+
+    this.features = [cabin, cabinInterior, attic];
 
     window.addEventListener('resize', () => this.onResize());
     this.onResize();
 
     this.animate = this.animate.bind(this);
+  }
+
+  async _bootstrap() {
+    // Page begins with the fade overlay shown (set in RoomTransition's
+    // constructor). Disable movement so the player can't act before the
+    // name prompt closes / fade finishes.
+    this.movement.setEnabled(false);
+
+    const startRoom = determineStartRoom(this.save);
+    if (!startRoom) {
+      // All rooms cleared in a prior session — go straight to the end card.
+      this._showEndCard();
+      return;
+    }
+
+    await this.namePrompt.run();
+    await this.transition.exitBlack();
+    this.movement.setEnabled(true);
+  }
+
+  async _onRoomSolved(roomId) {
+    const idx = ROOM_SEQUENCE.findIndex((r) => r.id === roomId);
+    const next = ROOM_SEQUENCE[idx + 1];
+    if (next) {
+      await this.transition.advance(next.spawn);
+    } else {
+      this._showEndCard();
+    }
+  }
+
+  _showEndCard() {
+    const card = document.createElement('div');
+    card.innerHTML = `
+      <div class="end-pretitle">A door closes</div>
+      <h2 class="end-title">To be continued…</h2>
+      <div class="end-actions">
+        <button class="reset">Play again</button>
+      </div>
+    `;
+    card.querySelector('.reset').addEventListener('click', () => {
+      this.save.reset();
+      window.location.reload();
+    });
+    this.transition.showEndCard(card);
   }
 
   onResize() {
@@ -110,6 +132,7 @@ export class Game {
   }
 
   start() {
+    this._bootstrap();
     this.renderer.setAnimationLoop(this.animate);
   }
 
@@ -125,4 +148,13 @@ export class Game {
 
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+// Walk the room sequence and return the first uncleared room, or null if
+// all rooms are complete. Drives initial spawn position.
+function determineStartRoom(save) {
+  for (const r of ROOM_SEQUENCE) {
+    if (!save.isRoomComplete(r.id)) return r;
+  }
+  return null;
 }

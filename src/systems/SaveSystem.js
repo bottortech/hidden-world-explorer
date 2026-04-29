@@ -15,6 +15,7 @@ const VERSION = 1;
 
 const EMPTY_STATE = () => ({
   version: VERSION,
+  playerName: null,
   completedRooms: [],
   discoveredClues: [],
   rooms: {}, // per-room partial state, keyed by roomId
@@ -98,6 +99,17 @@ export class SaveSystem {
       ...this.state.rooms,
       [roomId]: { ...(this.state.rooms[roomId] ?? {}), ...partial },
     };
+    this._persist();
+  }
+
+  // Player identity. Empty submissions are stored as null and rendered as
+  // 'UNKNOWN' so a future diegetic naming moment can overwrite cleanly.
+  getPlayerName() { return this.state.playerName; }
+  hasPlayerName() { return !!this.state.playerName; }
+  displayPlayerName() { return this.state.playerName || 'UNKNOWN'; }
+  setPlayerName(name) {
+    const cleaned = (name ?? '').trim().slice(0, 24);
+    this.state.playerName = cleaned || null;
     this._persist();
   }
 

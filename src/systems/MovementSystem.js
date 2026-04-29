@@ -27,6 +27,10 @@ const BOB_AMP_SIDE = 0.022;    // sideways sway amplitude (m)
 export class MovementSystem {
   constructor(camera, domElement) {
     this.camera = camera;
+    // Initialize enabled before any listener can reference it. Game.js sets
+    // this to false during startup transitions / name prompt and re-enables
+    // once the player should be in control.
+    this.enabled = true;
     // Use the canvas itself as the pointer-lock target — Safari is picky
     // and silently rejects requestPointerLock() when the element doesn't
     // match the click target.
@@ -47,12 +51,19 @@ export class MovementSystem {
     // Listen on document.body so clicks anywhere on the page bubble up and
     // engage pointer lock (overlays use pointer-events:none and let clicks
     // pass through to the canvas, which bubbles up here).
-    document.body.addEventListener('click', () => this.controls.lock());
+    document.body.addEventListener('click', () => {
+      if (!this.enabled) return;
+      this.controls.lock();
+    });
 
     // Enter / Space also engage pointer lock — keyboard counts as a user
     // gesture, and this saves the user from having to mouse-click first.
     window.addEventListener('keydown', (e) => {
-      if (this.controls.isLocked) return;
+      if (!this.enabled || this.controls.isLocked) return;
+      // Don't hijack Enter/Space when a form input has focus (e.g. name
+      // prompt, combo lock).
+      const t = document.activeElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
       if (e.code === 'Enter' || e.code === 'Space') {
         e.preventDefault();
         this.controls.lock();
@@ -72,8 +83,6 @@ export class MovementSystem {
     this.keys = new Set();
     window.addEventListener('keydown', (e) => this.keys.add(e.code));
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-
-    this.enabled = true;
   }
 
   // Disable controls during focused interactions (inspect view, menus). When
