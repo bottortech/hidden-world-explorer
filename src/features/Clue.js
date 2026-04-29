@@ -29,6 +29,7 @@ export class Clue {
       title: config.title,
       body: config.body,
       location: config.location,
+      room: config.room,
       keyLetter: extractKeyLetter(config.body),
     });
 

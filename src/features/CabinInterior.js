@@ -38,6 +38,7 @@ export class CabinInterior {
         '  "Page. Notebook. Photo."\n\n' +
         'At the bottom, in the same shaky hand, a single character pressed deep into the paper:\n\n' +
         '  *A*',
+      room: 'cabin',
       location: 'Cabin · desk',
       object: note,
       gate: inside,
@@ -54,6 +55,7 @@ export class CabinInterior {
       id: 'cabin-beam',
       title: 'A nameplate on the beam',
       body: 'A small wooden plaque is nailed to the underside of the cross-beam. A name is burned into it, the letters uneven where the iron slipped:\n\n  B. Brand',
+      room: 'cabin',
       location: 'Cabin · roof beam',
       object: plaque,
       gate: inside,
@@ -72,6 +74,7 @@ export class CabinInterior {
       id: 'cabin-hearth',
       title: 'A burned envelope in the ash',
       body: 'Most of the envelope is gone — only a curl of paper at the edge of the hearth survived. You can still read the address:\n\n  …5 Ashwood Lane.\n\nThe rest crumbles when you touch it.',
+      room: 'cabin',
       location: 'Cabin · hearth',
       object: envelope,
       gate: inside,
@@ -88,6 +91,7 @@ export class CabinInterior {
       id: 'cabin-chair',
       title: 'A folded letter wedged under the seat',
       body: 'The paper is brittle. A few lines, in a careful hand:\n\n  "…and so I write to you, dear Henry, in haste, before the cabin is sealed for the season…"',
+      room: 'cabin',
       location: 'Cabin · chair',
       object: folded,
       gate: inside,
@@ -109,6 +113,7 @@ export class CabinInterior {
         `  Property of ${playerName}.\n\n` +
         'Most of the pages are blank. Among the few that are written on, one entry stands out:\n\n' +
         '  "...made it back before the storm. The cabin is *S*ealed for the season."',
+      room: 'cabin',
       location: 'Cabin · desk',
       object: book,
       gate: inside,
@@ -124,6 +129,7 @@ export class CabinInterior {
       id: 'cabin-photo',
       title: 'A framed photograph',
       body: 'Two figures stand in the cabin doorway, half-blurred by the long exposure. You can\'t quite make out their faces. On the back of the frame, in pencil:\n\n  "For *H*enry — Summer, before the snow."',
+      room: 'cabin',
       location: 'Cabin · west wall',
       object: photo,
       gate: inside,

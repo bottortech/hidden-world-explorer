@@ -92,6 +92,7 @@ export class Game {
       return;
     }
 
+    this.journal.setCurrentRoom(startRoom.id);
     await this.namePrompt.run();
     await this.transition.exitBlack();
     this.movement.setEnabled(true);
@@ -101,6 +102,9 @@ export class Game {
     const idx = ROOM_SEQUENCE.findIndex((r) => r.id === roomId);
     const next = ROOM_SEQUENCE[idx + 1];
     if (next) {
+      // Switch journal scope before the fade so opening it during the
+      // transition shows the new room (empty) rather than the old one.
+      this.journal.setCurrentRoom(next.id);
       await this.transition.advance(next.spawn);
     } else {
       this._showEndCard();

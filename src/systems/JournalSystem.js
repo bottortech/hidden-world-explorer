@@ -135,6 +135,7 @@ export class JournalSystem {
     this.registry = new Map();
     this.open = false;
     this._toastTimer = null;
+    this.currentRoomId = null;
 
     this._injectStyle();
     this._createPanel();
@@ -154,6 +155,15 @@ export class JournalSystem {
 
   register(def) {
     this.registry.set(def.id, def);
+    this._render();
+  }
+
+  // Scope the visible journal entries to a single room. Past-room clues stay
+  // in the registry (and in save state) but don't render here. Set to null
+  // to show no entries.
+  setCurrentRoom(roomId) {
+    if (this.currentRoomId === roomId) return;
+    this.currentRoomId = roomId;
     this._render();
   }
 
@@ -204,7 +214,10 @@ export class JournalSystem {
 
   _render() {
     const ids = this.save.state.discoveredClues;
-    const known = ids.map((id) => this.registry.get(id)).filter(Boolean);
+    const known = ids
+      .map((id) => this.registry.get(id))
+      .filter(Boolean)
+      .filter((c) => !this.currentRoomId || c.room === this.currentRoomId);
     const headerCount = `${known.length} found`;
 
     if (known.length === 0) {
