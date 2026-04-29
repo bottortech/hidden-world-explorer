@@ -72,6 +72,19 @@ export class MovementSystem {
     this.keys = new Set();
     window.addEventListener('keydown', (e) => this.keys.add(e.code));
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+
+    this.enabled = true;
+  }
+
+  // Disable controls during focused interactions (inspect view, menus). When
+  // disabling we also release pointer lock so the cursor reappears for UI;
+  // keys are cleared so a held W doesn't auto-walk on re-enable.
+  setEnabled(value) {
+    if (this.enabled === value) return;
+    this.enabled = value;
+    this.keys.clear();
+    this.velocity.set(0, 0, 0);
+    if (!value && this.controls.isLocked) this.controls.unlock();
   }
 
   // Other systems/features query player position via this to stay decoupled.
@@ -90,6 +103,7 @@ export class MovementSystem {
   }
 
   update(dt) {
+    if (!this.enabled) return;
     // 1. Read input into a local 2D vector (forward / right).
     let f = 0;
     let r = 0;
