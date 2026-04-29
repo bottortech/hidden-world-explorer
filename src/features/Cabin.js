@@ -145,8 +145,9 @@ export class Cabin {
       leg.position.set(chairX + dx, 0.23, chairZ + dz);
       this.group.add(leg);
     }
-    // Place where the rune is carved on the underside of the seat.
-    this.chairUnderside = new THREE.Vector3(chairX, 0.42, chairZ);
+    // Place where the rune is carved on the underside of the seat. Slight
+    // offset below the seat bottom (0.42) avoids z-fighting with the seat.
+    this.chairUnderside = new THREE.Vector3(chairX, 0.40, chairZ);
 
     // --- Fireplace (west interior wall) ---------------------------------------
     // A black recess in the west wall with a faint ember glow at its base.
@@ -172,8 +173,9 @@ export class Cabin {
     ember.position.set(hearthX + 0.1, 0.25, hearthZ);
     this.group.add(ember);
     this.ember = ember;
-    // Anchor for the soot rune (face of the hearth, just above the embers).
-    this.hearthPos = new THREE.Vector3(hearthX + 0.05, 0.5, hearthZ);
+    // Anchor for the soot rune. Place just in front of the hearth's east
+    // (cabin-facing) face so it's visible from inside without z-fighting.
+    this.hearthPos = new THREE.Vector3(hearthX + hearthD / 2 + 0.01, 0.55, hearthZ);
 
     // --- Beam (above interior, decorative) ------------------------------------
     // Single cross-beam running E-W under the roof; its underside is where
