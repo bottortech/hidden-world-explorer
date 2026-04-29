@@ -1,5 +1,40 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLORS } from '../utils/colors.js';
+
+// Module-scoped loader so multiple props can share parsing infrastructure.
+const gltfLoader = new GLTFLoader();
+
+// Load a GLB and return a Group whose contents are scaled so the model's
+// vertical span equals `targetHeight`, then translated so the bottom rests
+// on y=0 and the X/Z bounds are centered on the origin. Useful when the
+// authored asset uses arbitrary scene-graph transforms or non-meter units.
+function loadAndNormalize(url, { targetHeight }) {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        const root = gltf.scene;
+        const bbox = new THREE.Box3().setFromObject(root);
+        const size = bbox.getSize(new THREE.Vector3());
+        const scale = size.y > 0 ? targetHeight / size.y : 1;
+        root.scale.setScalar(scale);
+
+        const sBbox = new THREE.Box3().setFromObject(root);
+        const center = sBbox.getCenter(new THREE.Vector3());
+        root.position.x -= center.x;
+        root.position.z -= center.z;
+        root.position.y -= sBbox.min.y;
+
+        const wrapper = new THREE.Group();
+        wrapper.add(root);
+        resolve(wrapper);
+      },
+      undefined,
+      (err) => reject(err),
+    );
+  });
+}
 
 // Single-room weathered cabin sitting in a clearing in the NE forest. This
 // feature owns *only* the structure: walls, floor, roof, doorway, door, a
@@ -215,67 +250,40 @@ export class Cabin {
     // (cabin-facing) face so it's visible from inside without z-fighting.
     this.hearthPos = new THREE.Vector3(hearthX + hearthD / 2 + 0.01, 0.55, hearthZ);
 
-    // --- Couch (center of room, facing the hearth) ---------------------------
-    // Long side runs north-south; couch faces west so the player sees its
-    // back when they spawn looking south at the door.
-    const couchFrame = new THREE.MeshStandardMaterial({
-      color: 0x4a3232, roughness: 1, flatShading: true,
-    });
-    const couchCushion = new THREE.MeshStandardMaterial({
-      color: 0x614040, roughness: 1, flatShading: true,
-    });
-    const couchGroup = new THREE.Group();
-    couchGroup.position.set(this.cx - 0.2, 0, this.cz);
-    couchGroup.rotation.y = Math.PI / 2;
-    {
-      const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.30, 0.7), couchFrame);
-      base.position.y = 0.20;
-      couchGroup.add(base);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 0.18), couchFrame);
-      back.position.set(0, 0.55, -0.26);
-      couchGroup.add(back);
-      for (const xSign of [-1, 1]) {
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.40, 0.7), couchFrame);
-        arm.position.set(xSign * 0.74, 0.40, 0);
-        couchGroup.add(arm);
-      }
-      for (let i = 0; i < 3; i++) {
-        const cushion = new THREE.Mesh(
-          new THREE.BoxGeometry(0.45, 0.14, 0.55), couchCushion,
-        );
-        cushion.position.set((i - 1) * 0.50, 0.42, 0.05);
-        couchGroup.add(cushion);
-      }
-    }
-    this.group.add(couchGroup);
-    // Couch collider (group is rotated 90°, so width is now along Z).
+    // --- Couch (GLB, center of room, facing the hearth) ----------------------
+    // Async load — placeholder Group reserves the world transform so collider
+    // and coffeeTableTop anchors stay valid even before the model arrives.
+    const couchPlaceholder = new THREE.Group();
+    couchPlaceholder.position.set(this.cx - 0.2, 0, this.cz);
+    couchPlaceholder.rotation.y = Math.PI / 2;
+    this.group.add(couchPlaceholder);
+    loadAndNormalize(
+      `${import.meta.env.BASE_URL}old_reliable_couch.glb`,
+      { targetHeight: 0.78 },
+    ).then((mesh) => couchPlaceholder.add(mesh))
+      .catch((err) => console.warn('Cabin: couch GLB failed to load', err));
+    // Couch collider — independent of the model arriving, sized to the
+    // expected scaled bbox (1.7m long × 0.85m deep). Group is rotated 90°,
+    // so length runs along world Z.
     movement.addColliders([{
-      minX: this.cx - 0.55, maxX: this.cx + 0.15,
+      minX: this.cx - 0.6, maxX: this.cx + 0.25,
       minZ: this.cz - 0.85, maxZ: this.cz + 0.85,
     }]);
 
-    // --- Coffee table (between couch and hearth) -----------------------------
-    const tableMat = new THREE.MeshStandardMaterial({
-      color: 0x3a2418, roughness: 0.95,
-    });
+    // --- Coffee table (GLB, between couch and hearth) ------------------------
     const tableTopY = 0.42;
-    const tableGroup = new THREE.Group();
     const tableX = this.cx - 1.5;
-    tableGroup.position.set(tableX, 0, this.cz);
-    {
-      const top = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.5), tableMat);
-      top.position.y = tableTopY;
-      tableGroup.add(top);
-      for (const [dx, dz] of [[-0.40, -0.20], [0.40, -0.20], [-0.40, 0.20], [0.40, 0.20]]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.40, 0.05), tableMat);
-        leg.position.set(dx, 0.20, dz);
-        tableGroup.add(leg);
-      }
-    }
-    this.group.add(tableGroup);
+    const tablePlaceholder = new THREE.Group();
+    tablePlaceholder.position.set(tableX, 0, this.cz);
+    this.group.add(tablePlaceholder);
+    loadAndNormalize(
+      `${import.meta.env.BASE_URL}wooden_table.glb`,
+      { targetHeight: tableTopY },
+    ).then((mesh) => tablePlaceholder.add(mesh))
+      .catch((err) => console.warn('Cabin: table GLB failed to load', err));
     movement.addColliders([{
-      minX: tableX - 0.45, maxX: tableX + 0.45,
-      minZ: this.cz - 0.25, maxZ: this.cz + 0.25,
+      minX: tableX - 0.55, maxX: tableX + 0.55,
+      minZ: this.cz - 0.30, maxZ: this.cz + 0.30,
     }]);
     this.coffeeTableTop = new THREE.Vector3(tableX, tableTopY + 0.02, this.cz);
 
