@@ -8,9 +8,9 @@ import { ComboLock } from './ComboLock.js';
 //   • 2 lore items — leather book (carries player name) and framed photo.
 //
 // Solution: "ASH"
-//   Beam plaque   → A    ("B. Br*A*nd" burned into the wood)
-//   Hearth letter → S    ("…5 A*S*hwood Lane.")
-//   Chair letter  → H    ("…dear *H*enry, in haste…")
+//   Torn page    → A   ( + order hint "Page. Notebook. Photo." )
+//   Notebook     → S
+//   Photograph   → H
 //
 // onSolved is fired when the lock yields. Game wires this to the room
 // transition so solving Room 1 fades into Room 2.
@@ -33,7 +33,11 @@ export class CabinInterior {
     new Clue(interaction, journal, inspect, {
       id: 'cabin-note',
       title: 'Torn page',
-      body: 'Hand-scratched, smudged with soot:\n\n  "Beam. Hearth. Hand."\n\nNothing else on the page.',
+      body:
+        'Hand-scratched, smudged with soot:\n\n' +
+        '  "Page. Notebook. Photo."\n\n' +
+        'At the bottom, in the same shaky hand, a single character pressed deep into the paper:\n\n' +
+        '  *A*',
       location: 'Cabin · desk',
       object: note,
       gate: inside,
@@ -49,7 +53,7 @@ export class CabinInterior {
     new Clue(interaction, journal, inspect, {
       id: 'cabin-beam',
       title: 'A nameplate on the beam',
-      body: 'A small wooden plaque is nailed to the underside of the cross-beam. A name is burned into it, the letters uneven where the iron slipped:\n\n  B. Br*A*nd',
+      body: 'A small wooden plaque is nailed to the underside of the cross-beam. A name is burned into it, the letters uneven where the iron slipped:\n\n  B. Brand',
       location: 'Cabin · roof beam',
       object: plaque,
       gate: inside,
@@ -67,7 +71,7 @@ export class CabinInterior {
     new Clue(interaction, journal, inspect, {
       id: 'cabin-hearth',
       title: 'A burned envelope in the ash',
-      body: 'Most of the envelope is gone — only a curl of paper at the edge of the hearth survived. You can still read the address:\n\n  …5 A*S*hwood Lane.\n\nThe rest crumbles when you touch it.',
+      body: 'Most of the envelope is gone — only a curl of paper at the edge of the hearth survived. You can still read the address:\n\n  …5 Ashwood Lane.\n\nThe rest crumbles when you touch it.',
       location: 'Cabin · hearth',
       object: envelope,
       gate: inside,
@@ -83,7 +87,7 @@ export class CabinInterior {
     new Clue(interaction, journal, inspect, {
       id: 'cabin-chair',
       title: 'A folded letter wedged under the seat',
-      body: 'The paper is brittle. A few lines, in a careful hand:\n\n  "…and so I write to you, dear *H*enry, in haste, before the cabin is sealed for the season…"',
+      body: 'The paper is brittle. A few lines, in a careful hand:\n\n  "…and so I write to you, dear Henry, in haste, before the cabin is sealed for the season…"',
       location: 'Cabin · chair',
       object: folded,
       gate: inside,
@@ -103,7 +107,8 @@ export class CabinInterior {
       body:
         'The cover is cracked, the spine half loose. Inside the front board, in faded ink:\n\n' +
         `  Property of ${playerName}.\n\n` +
-        'Most of the pages are blank. The few that are written on talk about weather, deliveries, and a name — Branna — that\'s been crossed out.',
+        'Most of the pages are blank. Among the few that are written on, one entry stands out:\n\n' +
+        '  "...made it back before the storm. The cabin is *S*ealed for the season."',
       location: 'Cabin · desk',
       object: book,
       gate: inside,
@@ -118,7 +123,7 @@ export class CabinInterior {
     new Clue(interaction, journal, inspect, {
       id: 'cabin-photo',
       title: 'A framed photograph',
-      body: 'Two figures stand in the cabin doorway, half-blurred by the long exposure. You can\'t quite make out their faces. On the back of the frame, in pencil:\n\n  "Summer, before the snow."',
+      body: 'Two figures stand in the cabin doorway, half-blurred by the long exposure. You can\'t quite make out their faces. On the back of the frame, in pencil:\n\n  "For *H*enry — Summer, before the snow."',
       location: 'Cabin · west wall',
       object: photo,
       gate: inside,
