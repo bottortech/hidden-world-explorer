@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { rand } from '../utils/math.js';
 
 // Forest backed by a low-poly GLB tree model. The model is loaded once,
@@ -22,7 +23,7 @@ export class Forest {
 
     // Defaults tuned for the current world. Override via constructor opts.
     this.opts = {
-      modelUrl: '/low_poly_tree_scene_free.glb',
+      modelUrl: `${import.meta.env.BASE_URL}low_poly_tree_scene_free.glb`,
       count: 240,
       innerRadius: 8,
       outerRadius: 110,
@@ -49,6 +50,7 @@ export class Forest {
 
   _load() {
     const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
     loader.load(
       this.opts.modelUrl,
       (gltf) => {
