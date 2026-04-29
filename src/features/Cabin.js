@@ -215,6 +215,70 @@ export class Cabin {
     // (cabin-facing) face so it's visible from inside without z-fighting.
     this.hearthPos = new THREE.Vector3(hearthX + hearthD / 2 + 0.01, 0.55, hearthZ);
 
+    // --- Couch (center of room, facing the hearth) ---------------------------
+    // Long side runs north-south; couch faces west so the player sees its
+    // back when they spawn looking south at the door.
+    const couchFrame = new THREE.MeshStandardMaterial({
+      color: 0x4a3232, roughness: 1, flatShading: true,
+    });
+    const couchCushion = new THREE.MeshStandardMaterial({
+      color: 0x614040, roughness: 1, flatShading: true,
+    });
+    const couchGroup = new THREE.Group();
+    couchGroup.position.set(this.cx - 0.2, 0, this.cz);
+    couchGroup.rotation.y = Math.PI / 2;
+    {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.30, 0.7), couchFrame);
+      base.position.y = 0.20;
+      couchGroup.add(base);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 0.18), couchFrame);
+      back.position.set(0, 0.55, -0.26);
+      couchGroup.add(back);
+      for (const xSign of [-1, 1]) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.40, 0.7), couchFrame);
+        arm.position.set(xSign * 0.74, 0.40, 0);
+        couchGroup.add(arm);
+      }
+      for (let i = 0; i < 3; i++) {
+        const cushion = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.14, 0.55), couchCushion,
+        );
+        cushion.position.set((i - 1) * 0.50, 0.42, 0.05);
+        couchGroup.add(cushion);
+      }
+    }
+    this.group.add(couchGroup);
+    // Couch collider (group is rotated 90°, so width is now along Z).
+    movement.addColliders([{
+      minX: this.cx - 0.55, maxX: this.cx + 0.15,
+      minZ: this.cz - 0.85, maxZ: this.cz + 0.85,
+    }]);
+
+    // --- Coffee table (between couch and hearth) -----------------------------
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2418, roughness: 0.95,
+    });
+    const tableTopY = 0.42;
+    const tableGroup = new THREE.Group();
+    const tableX = this.cx - 1.5;
+    tableGroup.position.set(tableX, 0, this.cz);
+    {
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.5), tableMat);
+      top.position.y = tableTopY;
+      tableGroup.add(top);
+      for (const [dx, dz] of [[-0.40, -0.20], [0.40, -0.20], [-0.40, 0.20], [0.40, 0.20]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.40, 0.05), tableMat);
+        leg.position.set(dx, 0.20, dz);
+        tableGroup.add(leg);
+      }
+    }
+    this.group.add(tableGroup);
+    movement.addColliders([{
+      minX: tableX - 0.45, maxX: tableX + 0.45,
+      minZ: this.cz - 0.25, maxZ: this.cz + 0.25,
+    }]);
+    this.coffeeTableTop = new THREE.Vector3(tableX, tableTopY + 0.02, this.cz);
+
     // --- Beam (above interior, decorative) ------------------------------------
     // Single cross-beam running E-W under the roof; its underside is where
     // the beam-rune clue is carved.

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Clue } from './Clue.js';
 import { ComboLock } from './ComboLock.js';
 import { Key } from './Key.js';
+import { SmokeTrail } from './SmokeTrail.js';
 
 // Room 1's puzzle layout. Builds on Cabin's geometry anchors. Owns six props:
 //   • 4 clue items — desk note (order hint) + three prose clues whose body
@@ -152,6 +153,47 @@ export class CabinInterior {
       gate: inside,
     });
 
+    // --- Lore 4: stack of magazines on the coffee table ---------------------
+    const magazines = makeMagazineStack();
+    magazines.position.copy(cabin.coffeeTableTop);
+    magazines.position.x += 0.20;
+    magazines.position.z += 0.10;
+    magazines.rotation.y = -0.18;
+    scene.add(magazines);
+    new Clue(interaction, journal, inspect, {
+      id: 'cabin-magazines',
+      title: 'A stack of magazines',
+      body:
+        'Three issues, dog-eared. The cover of the top one is stained where a glass once sat — the headline\'s unreadable, but a date in the corner reads:\n\n  SUMMER 1956\n\nA mailing label on the back: HENRY BRAND, RFD 5 ASHWOOD.',
+      room: 'cabin',
+      location: 'Cabin · coffee table',
+      object: magazines,
+      gate: inside,
+    });
+
+    // --- Lore 5: ashtray with a still-lit cigarette --------------------------
+    const ashtray = makeAshtrayWithCigarette();
+    ashtray.position.copy(cabin.coffeeTableTop);
+    ashtray.position.x -= 0.18;
+    ashtray.position.z -= 0.10;
+    scene.add(ashtray);
+    new Clue(interaction, journal, inspect, {
+      id: 'cabin-ashtray',
+      title: 'A glass ashtray',
+      body:
+        'Half-full of cold butts. One cigarette is still burning, smoke curling up from the tray. The ash on the tip is hot.\n\nWhoever was sitting here was sitting here just now.',
+      room: 'cabin',
+      location: 'Cabin · coffee table',
+      object: ashtray,
+      gate: inside,
+    });
+
+    // Sprite-based smoke rising from the cigarette tip. Tip is at local
+    // (0.073, 0.025, 0) relative to the ashtray group, and the group is
+    // unrotated so we just add the offset to its world position.
+    const tipWorld = ashtray.position.clone().add(new THREE.Vector3(0.073, 0.025, 0));
+    this.smoke = new SmokeTrail(scene, tipWorld.toArray());
+
     // --- Atmosphere: shelf with three jars (decoration only, not clickable) --
     const shelfGroup = makeJarShelf();
     shelfGroup.position.set(cabin.cx + halfW - this.cabin.wallT - 0.18, 1.85, cabin.cz - 0.5);
@@ -216,6 +258,7 @@ export class CabinInterior {
       this.lockMount.material.opacity = 0.7 + Math.sin(t * 1.1) * 0.18;
     }
     this.key?.update?.(dt);
+    this.smoke?.update?.(dt);
   }
 }
 
@@ -306,6 +349,68 @@ function makeCoatMesh() {
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.55, 0.05), wool);
   body.position.set(0, -0.05, 0);
   group.add(body);
+  return group;
+}
+
+function makeMagazineStack() {
+  const colors = [
+    new THREE.MeshStandardMaterial({ color: 0x6a3a3a, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x4a5a3a, roughness: 1 }),
+  ];
+  const group = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.012, 0.16), colors[i]);
+    mag.position.y = 0.006 + i * 0.014;
+    mag.rotation.y = (i - 1) * 0.18;
+    mag.position.x = (i - 1) * 0.012;
+    mag.position.z = (i - 1) * 0.008;
+    group.add(mag);
+  }
+  return group;
+}
+
+function makeAshtrayWithCigarette() {
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x4a4040, transparent: true, opacity: 0.7, roughness: 0.4, metalness: 0.1,
+  });
+  const ash = new THREE.MeshStandardMaterial({ color: 0x18120c, roughness: 1 });
+  const paper = new THREE.MeshStandardMaterial({
+    color: 0xe6dcc4, emissive: 0x4a3a28, emissiveIntensity: 0.2, roughness: 1,
+  });
+  const ember = new THREE.MeshStandardMaterial({
+    color: 0xff5520, emissive: 0xff5520, emissiveIntensity: 1.8,
+  });
+  const group = new THREE.Group();
+
+  // Dish (slightly conical)
+  const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.07, 0.025, 16), glass);
+  dish.position.y = 0.0125;
+  group.add(dish);
+
+  // Pile of cold butts in the center (small dark mass).
+  const butts = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), ash);
+  butts.scale.set(1, 0.4, 1);
+  butts.position.y = 0.025;
+  group.add(butts);
+
+  // Lit cigarette resting across the rim, sticking out to the +X side.
+  const cig = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.07, 8), paper);
+  cig.rotation.z = Math.PI / 2;
+  cig.position.set(0.038, 0.025, 0);
+  group.add(cig);
+
+  // Glowing ember at the tip.
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.012, 8), ember);
+  tip.rotation.z = Math.PI / 2;
+  tip.position.set(0.073, 0.025, 0);
+  group.add(tip);
+
+  // Tiny ember light so the smoke catches a warm tint near the source.
+  const emberLight = new THREE.PointLight(0xff5520, 0.45, 0.6, 2);
+  emberLight.position.set(0.073, 0.025, 0);
+  group.add(emberLight);
+
   return group;
 }
 
