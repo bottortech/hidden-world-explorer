@@ -42,7 +42,7 @@ export class Game {
     this.interaction = new InteractionSystem(this.camera, this.renderer.domElement);
     this.world = new WorldSystem(this.scene);
     this.objectives = new ObjectiveSystem();
-    this.journal = new JournalSystem(this.save);
+    this.journal = new JournalSystem(this.save, this.movement);
     this.inspect = new InspectSystem(this.movement);
     this.namePrompt = new NamePrompt(this.save);
     this.transition = new RoomTransition(this.movement, this.camera);

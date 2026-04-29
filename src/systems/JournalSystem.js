@@ -130,12 +130,17 @@ const CSS = `
 `;
 
 export class JournalSystem {
-  constructor(save) {
+  constructor(save, movement) {
     this.save = save;
+    this.movement = movement;
     this.registry = new Map();
     this.open = false;
     this._toastTimer = null;
     this.currentRoomId = null;
+    // Snapshot of movement.enabled at open-time so we restore it correctly
+    // when the journal closes (don't blindly re-enable if a transition or
+    // name prompt was the one that disabled movement).
+    this._restoreMovement = false;
 
     this._injectStyle();
     this._createPanel();
@@ -181,8 +186,24 @@ export class JournalSystem {
   }
 
   toggle() { this.open ? this.close() : this.show(); }
-  show() { this.open = true; this.panel.classList.add('open'); }
-  close() { this.open = false; this.panel.classList.remove('open'); }
+  show() {
+    if (this.open) return;
+    this.open = true;
+    this.panel.classList.add('open');
+    // Release pointer lock + freeze the player so the cursor is available
+    // for scrolling the panel.
+    this._restoreMovement = !!this.movement?.enabled;
+    if (this._restoreMovement) this.movement.setEnabled(false);
+  }
+  close() {
+    if (!this.open) return;
+    this.open = false;
+    this.panel.classList.remove('open');
+    if (this._restoreMovement) {
+      this.movement.setEnabled(true);
+      this._restoreMovement = false;
+    }
+  }
 
   _injectStyle() {
     if (document.getElementById(STYLE_ID)) return;
