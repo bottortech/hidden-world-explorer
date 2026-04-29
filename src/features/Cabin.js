@@ -121,9 +121,18 @@ export class Cabin {
     movement.addColliders(this._wallColliders());
 
     // --- Interior light -------------------------------------------------------
-    this.interiorLight = new THREE.PointLight(COLORS.warmLight, 1.6, 7.5, 1.6);
+    // Doubled in intensity and reach versus the original ambient-only build
+    // so a sealed, doorless room is actually readable. Decay lowered too,
+    // so the corners (chair, hearth, beam) aren't crushed black.
+    this.interiorLight = new THREE.PointLight(COLORS.warmLight, 3.2, 11, 1.2);
     this.interiorLight.position.set(this.cx, this.h - 0.5, this.cz);
     this.group.add(this.interiorLight);
+
+    // Soft localized fill so the deep corners aren't pitch-dark when the
+    // ceiling light is occluded by furniture.
+    const fill = new THREE.PointLight(0x6a4a78, 0.55, 9, 1.4);
+    fill.position.set(this.cx, 1.0, this.cz);
+    this.group.add(fill);
 
     // --- Desk (north interior) ------------------------------------------------
     const desk = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.8, 1.0), floorMat);
@@ -132,6 +141,30 @@ export class Cabin {
     desk.rotation.y = 0.04;
     this.group.add(desk);
     this.deskTop = new THREE.Vector3(this.cx, 0.81, deskZ);
+
+    // --- Desk candle ----------------------------------------------------------
+    // Right side of the desk. Acts as a local fill light and reads as
+    // human-presence; the flame sits a bit above the wax so the point light
+    // illuminates the desk surface and the carved beam-letter overhead.
+    const candleX = this.cx + 0.6;
+    const candleZ = deskZ + 0.15;
+    const wax = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.045, 0.18, 12),
+      new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.85 }),
+    );
+    wax.position.set(candleX, 0.81 + 0.09, candleZ);
+    this.group.add(wax);
+    const flame = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.04, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffe0a0, fog: false }),
+    );
+    flame.scale.set(1, 1.6, 1);
+    flame.position.set(candleX, 0.81 + 0.22, candleZ);
+    this.group.add(flame);
+    this.candleFlame = flame;
+    this.candleLight = new THREE.PointLight(0xffc878, 1.6, 4.5, 1.4);
+    this.candleLight.position.copy(flame.position);
+    this.group.add(this.candleLight);
 
     // --- Chair (next to desk) -------------------------------------------------
     const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.7), floorMat);
@@ -173,7 +206,7 @@ export class Cabin {
     mantle.position.set(hearthX + 0.05, hearthH + 0.1, hearthZ);
     this.group.add(mantle);
 
-    const ember = new THREE.PointLight(0x884420, 0.6, 2.2, 2);
+    const ember = new THREE.PointLight(0xa8552a, 1.1, 3.2, 1.8);
     ember.position.set(hearthX + 0.1, 0.25, hearthZ);
     this.group.add(ember);
     this.ember = ember;
@@ -275,8 +308,15 @@ export class Cabin {
       }
     }
 
-    // Ember flicker.
+    // Ember + candle flicker. Each driven by two unrelated frequencies so
+    // the flicker reads organic rather than periodic.
     const t = performance.now() * 0.001;
-    this.ember.intensity = 0.45 + Math.sin(t * 3.7) * 0.08 + Math.sin(t * 7.3) * 0.05;
+    this.ember.intensity = 1.0 + Math.sin(t * 3.7) * 0.16 + Math.sin(t * 7.3) * 0.1;
+    if (this.candleLight) {
+      const f = 1.5 + Math.sin(t * 9.1) * 0.18 + Math.sin(t * 4.3) * 0.12;
+      this.candleLight.intensity = f;
+      // Tiny flame stretch so the silhouette reads as alive.
+      this.candleFlame.scale.y = 1.55 + Math.sin(t * 11.0) * 0.18;
+    }
   }
 }

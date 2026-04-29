@@ -11,8 +11,6 @@
 // Already-discovered clues from a prior session show up in the panel as soon
 // as their feature registers (which happens during Game construction).
 
-import { runeChar } from '../data/runes.js';
-
 const PANEL_ID = 'journal-panel';
 const TOAST_ID = 'journal-toast';
 const STYLE_ID = 'journal-style';
@@ -84,14 +82,16 @@ const CSS = `
   align-items: center;
   gap: 12px;
 }
-#${PANEL_ID} .clue .symbol {
-  font-size: 32px;
-  color: #f0e3ff;
-  text-shadow: 0 0 8px rgba(184, 157, 214, 0.7);
+#${PANEL_ID} .clue .glyph {
+  font-size: 30px;
+  color: #fff5dd;
+  text-shadow: 0 0 10px rgba(252, 220, 160, 0.8);
   line-height: 1;
   flex-shrink: 0;
   width: 36px;
   text-align: center;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-weight: bold;
 }
 
 #${TOAST_ID} {
@@ -215,14 +215,13 @@ export class JournalSystem {
     }
 
     const items = known.map((c) => {
-      const symbol = c.symbol ? runeChar(c.symbol) : null;
       const inner = `
         <div class="title">${escapeHtml(c.title)}</div>
         ${c.location ? `<div class="loc">${escapeHtml(c.location)}</div>` : ''}
         <div class="body">${escapeHtml(c.body ?? '')}</div>
       `;
-      const body = symbol
-        ? `<div class="row"><div class="symbol">${symbol}</div><div>${inner}</div></div>`
+      const body = c.glyph
+        ? `<div class="row"><div class="glyph">${escapeHtml(c.glyph)}</div><div>${inner}</div></div>`
         : inner;
       return `<div class="clue">${body}</div>`;
     }).join('');

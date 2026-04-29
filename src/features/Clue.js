@@ -1,10 +1,9 @@
 import * as THREE from 'three';
-import { runeChar } from '../data/runes.js';
 
 // A discoverable clue placed in the world. Two variants:
 //   • Note clue   — a small folded paper / inscription. Inspect reveals text.
-//   • Rune clue   — a glowing carved rune. Inspect reveals the rune symbol
-//                   itself (which the player will need for the dial).
+//   • Glyph clue  — a glowing carved letter. Inspect reveals the character
+//                   itself (which the player will need for the door lock).
 //
 // On first inspect, the clue is logged to the journal. Subsequent inspects
 // just re-open the same view (idempotent).
@@ -13,12 +12,12 @@ import { runeChar } from '../data/runes.js';
 // target. The caller is responsible for placing it in the scene tree.
 //
 //   new Clue(interaction, journal, inspect, {
-//     id: 'beam-rune',
-//     title: 'Rune on the roof beam',
-//     body: 'A pale rune is etched into the underside of a beam.',
+//     id: 'beam-glyph',
+//     title: 'Letter carved into the beam',
+//     body: 'A faint letter is etched into the underside of a beam.',
 //     location: 'Cabin · roof beam',
-//     symbol: 'ansuz',                // optional — turns this into a rune clue
-//     object: glowingRuneMesh,
+//     glyph: 'A',                     // optional — turns this into a glyph clue
+//     object: glowingGlyphMesh,
 //     gate: () => playerInside(),     // optional — block click when false
 //   })
 export class Clue {
@@ -32,7 +31,7 @@ export class Clue {
       title: config.title,
       body: config.body,
       location: config.location,
-      symbol: config.symbol,
+      glyph: config.glyph,
     });
 
     interaction.add({
@@ -45,9 +44,9 @@ export class Clue {
   }
 
   _open() {
-    const { id, title, body, location, symbol } = this.config;
+    const { id, title, body, location, glyph } = this.config;
     this.inspect.enter({
-      render: () => renderClueView({ title, body, location, symbol }),
+      render: () => renderClueView({ title, body, location, glyph }),
       onClose: () => {},
     });
     // Mark on open. Discover() is idempotent so reopening costs nothing.
@@ -75,13 +74,15 @@ const CSS = `
   letter-spacing: 0.16em;
   margin-bottom: 18px;
 }
-.clue-view .rune {
-  font-size: 120px;
+.clue-view .glyph {
+  font-size: 132px;
   text-align: center;
-  color: #f0e3ff;
-  text-shadow: 0 0 24px rgba(184, 157, 214, 0.9);
+  color: #fff5dd;
+  text-shadow: 0 0 24px rgba(252, 220, 160, 0.85);
   margin: 8px 0 18px;
   line-height: 1;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  letter-spacing: 0.04em;
 }
 .clue-view .body {
   font-size: 15px;
@@ -99,15 +100,15 @@ function ensureStyle() {
   document.head.appendChild(el);
 }
 
-function renderClueView({ title, body, location, symbol }) {
+function renderClueView({ title, body, location, glyph }) {
   ensureStyle();
   const root = document.createElement('div');
   root.className = 'clue-view';
-  const symbolHtml = symbol ? `<div class="rune">${runeChar(symbol)}</div>` : '';
+  const glyphHtml = glyph ? `<div class="glyph">${escapeHtml(glyph)}</div>` : '';
   root.innerHTML = `
     <h2>${escapeHtml(title)}</h2>
     ${location ? `<div class="loc">${escapeHtml(location)}</div>` : ''}
-    ${symbolHtml}
+    ${glyphHtml}
     <div class="body">${escapeHtml(body ?? '')}</div>
   `;
   return root;
@@ -122,15 +123,16 @@ function escapeHtml(s) {
     .replaceAll("'", '&#39;');
 }
 
-// Helper: build a small in-world rune carving mesh (a glyph-ish glowing plane).
-// Used by CabinInterior and other rooms when the symbol is the clue itself.
-export function makeRuneCarvingMesh(symbol, { color = 0xb89dd6, size = 0.5 } = {}) {
-  const tex = makeGlyphTexture(symbol);
+// Helper: build a small in-world carved-glyph mesh (a glowing letter on a
+// plane). Used by CabinInterior and other rooms when the character is the
+// clue itself.
+export function makeGlyphCarvingMesh(char, { color = 0xfde7b3, size = 0.5 } = {}) {
+  const tex = makeGlyphTexture(char);
   const mat = new THREE.MeshBasicMaterial({
     map: tex,
     color,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.95,
     fog: false,
     side: THREE.DoubleSide,
     depthWrite: false,
@@ -138,17 +140,17 @@ export function makeRuneCarvingMesh(symbol, { color = 0xb89dd6, size = 0.5 } = {
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
 
-function makeGlyphTexture(symbol) {
+function makeGlyphTexture(char) {
   const px = 256;
   const c = document.createElement('canvas');
   c.width = c.height = px;
   const g = c.getContext('2d');
   g.clearRect(0, 0, px, px);
   g.fillStyle = '#ffffff';
-  g.font = '180px serif';
+  g.font = 'bold 200px Georgia, "Times New Roman", serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(runeChar(symbol), px / 2, px / 2 + 8);
+  g.fillText(char, px / 2, px / 2 + 12);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
