@@ -17,7 +17,7 @@ const CSS = `
   justify-content: center;
   background: rgba(8, 4, 16, 0.78);
   backdrop-filter: blur(6px);
-  z-index: 90;
+  z-index: 100;
   font-family: 'Georgia', 'Times New Roman', serif;
   color: #e8d8ff;
   opacity: 0;
