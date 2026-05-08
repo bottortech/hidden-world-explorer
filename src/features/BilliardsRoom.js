@@ -59,7 +59,10 @@ export class BilliardsRoom {
 
     gltfLoader.load(
       `${import.meta.env.BASE_URL}the_billiards_room.glb`,
-      (gltf) => this.group.add(gltf.scene),
+      (gltf) => {
+        this.group.add(gltf.scene);
+        this._calibrateFloor();
+      },
       undefined,
       (err) => console.warn('BilliardsRoom: GLB failed to load', err),
     );
@@ -140,6 +143,53 @@ export class BilliardsRoom {
   isPlayerInside(p = this.movement.getPosition()) {
     const a = this.interiorAABB;
     return p.x >= a.minX && p.x <= a.maxX && p.z >= a.minZ && p.z <= a.maxZ;
+  }
+
+  // The asset's bbox min Y isn't the walking surface — billiards models
+  // typically have sub-floor geometry (table bases, plinths, borders) below
+  // the floor itself. Raycast down from a grid of points above the room,
+  // collect the lowest upward-facing surface hit per ray, and shift the
+  // group so that median floor height lands on world Y=0 (matching what
+  // the cabin and attic provide procedurally and what PLAYER_HEIGHT
+  // assumes).
+  _calibrateFloor() {
+    const raycaster = new THREE.Raycaster();
+    const samples = [];
+    const margin = 1.0;
+    const steps = 4;
+    const stepX = (this.worldMax.x - this.worldMin.x - 2 * margin) / steps;
+    const stepZ = (this.worldMax.z - this.worldMin.z - 2 * margin) / steps;
+    const rayY = this.worldMax.y + 5;
+
+    for (let i = 0; i <= steps; i++) {
+      for (let j = 0; j <= steps; j++) {
+        const x = this.worldMin.x + margin + i * stepX;
+        const z = this.worldMin.z + margin + j * stepZ;
+        raycaster.set(
+          new THREE.Vector3(x, rayY, z),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const hits = raycaster.intersectObject(this.group, true);
+        let lowestUpY = Infinity;
+        for (const hit of hits) {
+          if (!hit.face) continue;
+          const normal = hit.face.normal.clone();
+          normal.transformDirection(hit.object.matrixWorld);
+          if (normal.y > 0.5 && hit.point.y < lowestUpY) {
+            lowestUpY = hit.point.y;
+          }
+        }
+        if (lowestUpY !== Infinity) samples.push(lowestUpY);
+      }
+    }
+
+    if (samples.length === 0) {
+      console.warn('BilliardsRoom: floor calibration found no samples');
+      return;
+    }
+    samples.sort((a, b) => a - b);
+    const floorY = samples[Math.floor(samples.length / 2)];
+    this.group.position.y -= floorY;
   }
 
   update(dt) {

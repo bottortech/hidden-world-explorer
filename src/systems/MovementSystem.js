@@ -123,6 +123,56 @@ export class MovementSystem {
     this.colliders.push(...list);
   }
 
+  // Circle-vs-AABB push-out for every registered collider. Called once per
+  // sub-step from update(). The "inside the AABB" branch is the safety net:
+  // if a frame ever slips through (e.g. tab refocus blew dt to the 0.1 cap),
+  // we eject the player back along their motion instead of letting d2 ≈ 0
+  // skip resolution and leave them ghosting through walls.
+  _resolveCollisions() {
+    const r2 = PLAYER_RADIUS * PLAYER_RADIUS;
+    for (let i = 0; i < this.colliders.length; i++) {
+      const a = this.colliders[i];
+      const cx = clamp(this.basePos.x, a.minX, a.maxX);
+      const cz = clamp(this.basePos.z, a.minZ, a.maxZ);
+      const dx = this.basePos.x - cx;
+      const dz = this.basePos.z - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 1e-6) {
+        if (d2 < r2) {
+          const d = Math.sqrt(d2);
+          const push = (PLAYER_RADIUS - d) / d;
+          this.basePos.x += dx * push;
+          this.basePos.z += dz * push;
+        }
+        continue;
+      }
+      // Center is inside (or right on the boundary of) the AABB. Push out
+      // along the dominant velocity axis so we undo the offending step.
+      const vx = this.velocity.x;
+      const vz = this.velocity.z;
+      const useX = Math.abs(vx) >= Math.abs(vz);
+      if (useX && vx !== 0) {
+        if (vx > 0) this.basePos.x = a.minX - PLAYER_RADIUS;
+        else        this.basePos.x = a.maxX + PLAYER_RADIUS;
+      } else if (vz !== 0) {
+        if (vz > 0) this.basePos.z = a.minZ - PLAYER_RADIUS;
+        else        this.basePos.z = a.maxZ + PLAYER_RADIUS;
+      } else {
+        // Velocity is zero (got pushed inside by something else). Pick
+        // the nearest face.
+        const dL = this.basePos.x - a.minX;
+        const dR = a.maxX - this.basePos.x;
+        const dN = this.basePos.z - a.minZ;
+        const dS = a.maxZ - this.basePos.z;
+        const m = Math.min(dL, dR, dN, dS);
+        if      (m === dL) this.basePos.x = a.minX - PLAYER_RADIUS;
+        else if (m === dR) this.basePos.x = a.maxX + PLAYER_RADIUS;
+        else if (m === dN) this.basePos.z = a.minZ - PLAYER_RADIUS;
+        else                this.basePos.z = a.maxZ + PLAYER_RADIUS;
+      }
+    }
+  }
+
   update(dt) {
     if (!this.enabled) return;
     // 1. Read input into a local 2D vector (forward / right).
@@ -163,26 +213,22 @@ export class MovementSystem {
       this.velocity.z -= this.velocity.z * decay;
     }
 
-    // 5. Advance logical position.
-    this.basePos.x += this.velocity.x * dt;
-    this.basePos.z += this.velocity.z * dt;
-
-    // 6. Resolve collisions against registered AABBs (circle-vs-AABB push-out).
-    //    Pushing perpendicular to the closest edge naturally gives wall sliding.
-    for (let i = 0; i < this.colliders.length; i++) {
-      const a = this.colliders[i];
-      const cx = clamp(this.basePos.x, a.minX, a.maxX);
-      const cz = clamp(this.basePos.z, a.minZ, a.maxZ);
-      const dx = this.basePos.x - cx;
-      const dz = this.basePos.z - cz;
-      const d2 = dx * dx + dz * dz;
-      const r2 = PLAYER_RADIUS * PLAYER_RADIUS;
-      if (d2 < r2 && d2 > 1e-6) {
-        const d = Math.sqrt(d2);
-        const push = (PLAYER_RADIUS - d) / d;
-        this.basePos.x += dx * push;
-        this.basePos.z += dz * push;
-      }
+    // 5. Advance logical position with sub-stepping. Walls are 0.2m thick
+    //    and a single 0.1s frame at WALK_SPEED can move 0.6m, enough to
+    //    skip clean past a thin AABB. Cap each sub-step to a fraction of
+    //    the player radius so the closest-point check below always sees
+    //    the player approaching the AABB rather than sitting inside it.
+    const stepX = this.velocity.x * dt;
+    const stepZ = this.velocity.z * dt;
+    const stepLen = Math.hypot(stepX, stepZ);
+    const MAX_SUB_STEP = PLAYER_RADIUS * 0.25;
+    const subSteps = Math.max(1, Math.ceil(stepLen / MAX_SUB_STEP));
+    const subDx = stepX / subSteps;
+    const subDz = stepZ / subSteps;
+    for (let s = 0; s < subSteps; s++) {
+      this.basePos.x += subDx;
+      this.basePos.z += subDz;
+      this._resolveCollisions();
     }
 
     // 7. Camera bob. Phase advances by distance so cadence matches gait;
