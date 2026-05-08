@@ -11,6 +11,7 @@ import { NamePrompt } from '../systems/NamePrompt.js';
 import { RoomTransition } from '../systems/RoomTransition.js';
 import { HandSystem } from '../systems/HandSystem.js';
 import { KeyHud } from '../systems/KeyHud.js';
+import { PlayerBody } from '../systems/PlayerBody.js';
 import { Cabin } from '../features/Cabin.js';
 import { CabinInterior } from '../features/CabinInterior.js';
 import { Attic } from '../features/Attic.js';
@@ -46,6 +47,7 @@ export class Game {
     this.transition = new RoomTransition(this.movement, this.camera);
     this.hand = new HandSystem(this.camera);
     this.keyHud = new KeyHud(this.save);
+    this.playerBody = new PlayerBody(this.scene, this.camera);
 
     // Tap the hand on every interactable click for tactile feedback.
     this.scene.add(this.camera); // ensure camera is in scene graph for hand child
@@ -79,7 +81,7 @@ export class Game {
       origin: [200, 0, 0],
     });
 
-    this.features = [cabin, cabinInterior, attic, this.hand];
+    this.features = [cabin, cabinInterior, attic, this.hand, this.playerBody];
 
     window.addEventListener('resize', () => this.onResize());
     this.onResize();
