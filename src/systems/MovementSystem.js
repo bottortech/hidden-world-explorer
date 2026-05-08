@@ -45,6 +45,10 @@ export class MovementSystem {
     // AABB list for collision. Each entry: { minX, maxX, minZ, maxZ }.
     this.colliders = [];
 
+    // Analog input from on-screen joystick (mobile). Range [-1, 1] each.
+    // Combined with keyboard input in update().
+    this.virtualInput = { forward: 0, right: 0 };
+
     this.hint = document.getElementById('hint');
     this.crosshair = document.getElementById('crosshair');
 
@@ -93,7 +97,15 @@ export class MovementSystem {
     this.enabled = value;
     this.keys.clear();
     this.velocity.set(0, 0, 0);
+    this.virtualInput.forward = 0;
+    this.virtualInput.right = 0;
     if (!value && this.controls.isLocked) this.controls.unlock();
+  }
+
+  // On-screen joystick / external analog input. Both axes in [-1, 1].
+  setVirtualInput(forward, right) {
+    this.virtualInput.forward = forward;
+    this.virtualInput.right = right;
   }
 
   // Other systems/features query player position via this to stay decoupled.
@@ -121,9 +133,15 @@ export class MovementSystem {
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) r += 1;
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) r -= 1;
 
-    // Normalize so diagonal isn't sqrt(2) faster.
+    // Mix in joystick input. Analog values are preserved by clamping
+    // (rather than normalizing) the combined vector below.
+    f += this.virtualInput.forward;
+    r += this.virtualInput.right;
+
+    // Clamp to length 1 so diagonals aren't sqrt(2) faster, while still
+    // allowing partial deflection from the joystick to mean partial speed.
     const len = Math.hypot(f, r);
-    if (len > 0) {
+    if (len > 1) {
       f /= len;
       r /= len;
     }

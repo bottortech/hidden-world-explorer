@@ -12,9 +12,11 @@ import { RoomTransition } from '../systems/RoomTransition.js';
 import { HandSystem } from '../systems/HandSystem.js';
 import { KeyHud } from '../systems/KeyHud.js';
 import { PlayerBody } from '../systems/PlayerBody.js';
+import { MobileControls } from '../systems/MobileControls.js';
 import { Cabin } from '../features/Cabin.js';
 import { CabinInterior } from '../features/CabinInterior.js';
 import { Attic } from '../features/Attic.js';
+import { BilliardsRoom } from '../features/BilliardsRoom.js';
 
 // Linear room sequence. Each room knows where to spawn the player on entry.
 // To add another room, append an entry here and construct the matching
@@ -22,6 +24,7 @@ import { Attic } from '../features/Attic.js';
 const ROOM_SEQUENCE = [
   { id: 'cabin', spawn: { position: [22, 1.7, -23], yaw: Math.PI } },
   { id: 'attic', spawn: { position: [200, 1.7, 1.4], yaw: Math.PI } },
+  { id: 'billiards', spawn: { position: [400, 1.7, 213], yaw: Math.PI } },
 ];
 
 // Top-level orchestrator. Builds the scene/camera/renderer/systems, the
@@ -48,6 +51,12 @@ export class Game {
     this.hand = new HandSystem(this.camera);
     this.keyHud = new KeyHud(this.save);
     this.playerBody = new PlayerBody(this.scene, this.camera);
+    this.mobile = new MobileControls({
+      movement: this.movement,
+      journal: this.journal,
+      camera: this.camera,
+      canvas: this.renderer.domElement,
+    });
 
     // Tap the hand on every interactable click for tactile feedback.
     this.scene.add(this.camera); // ensure camera is in scene graph for hand child
@@ -81,7 +90,19 @@ export class Game {
       origin: [200, 0, 0],
     });
 
-    this.features = [cabin, cabinInterior, attic, this.hand, this.playerBody];
+    const billiards = new BilliardsRoom({
+      scene: this.scene,
+      movement: this.movement,
+      interaction: this.interaction,
+      journal: this.journal,
+      inspect: this.inspect,
+      save: this.save,
+      hand: this.hand,
+      onSolved: () => this._onRoomSolved('billiards'),
+      origin: [400, 0, 200],
+    });
+
+    this.features = [cabin, cabinInterior, attic, billiards, this.hand, this.playerBody];
 
     window.addEventListener('resize', () => this.onResize());
     this.onResize();
