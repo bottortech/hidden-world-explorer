@@ -4,25 +4,34 @@
 //                   "…dear *H*enry, in haste…"). The render emphasizes it
 //                   visually so the player notices it inside the prose.
 //
-// On first inspect, the clue is logged to the journal. Subsequent inspects
-// just re-open the same view (idempotent).
+// On click, the first-person hand runs a pickup choreography (reach →
+// pause holding the prop) and only then opens the inspect view. When the
+// player closes the view, the prop is restored and the hand returns to
+// idle. Wall-mounted props that shouldn't physically come off the wall
+// (photo, plaque, hung coat) take `pickupable: false` — the hand still
+// reaches but the mesh stays in place.
 //
-//   new Clue(interaction, journal, inspect, {
+//   new Clue(interaction, journal, inspect, hand, {
 //     id: 'cabin-chair-letter',
 //     title: 'Folded letter under the chair',
 //     body: '…and so I write to you, dear *H*enry, in haste…',
 //     location: 'Cabin · chair',
 //     object: foldedLetterMesh,
-//     gate: () => playerInside(),     // optional — block click when false
+//     pickupable: true,                // default true
+//     gate: () => playerInside(),      // optional — block click when false
 //   })
+//
+// `hand` may be omitted; when null, the inspect view opens immediately
+// without a pickup gesture.
 
 const EMPHASIS_RE = /\*([^*\n])\*/;
 
 export class Clue {
-  constructor(interaction, journal, inspect, config) {
+  constructor(interaction, journal, inspect, hand, config) {
     this.config = config;
     this.journal = journal;
     this.inspect = inspect;
+    this.hand = hand;
 
     journal.register({
       id: config.id,
@@ -42,11 +51,14 @@ export class Clue {
     });
   }
 
-  _open() {
-    const { id, title, body, location } = this.config;
+  async _open() {
+    const { id, title, body, location, object, pickupable = true } = this.config;
+    if (this.hand) {
+      await this.hand.beginItemHold(object, { reparent: pickupable });
+    }
     this.inspect.enter({
       render: () => renderClueView({ title, body, location }),
-      onClose: () => {},
+      onClose: () => this.hand?.endItemHold(),
     });
     this.journal.discover(id);
   }

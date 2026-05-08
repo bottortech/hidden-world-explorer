@@ -187,7 +187,7 @@ export class Attic {
     noteMesh.position.set(benchX - 0.3, benchTop_y + 0.005, benchZ - 0.4);
     noteMesh.rotation.y = -0.15;
     this.group.add(noteMesh);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-note',
       title: 'A scrap pinned to the wall',
       body: 'Childlike letters in chalk-blue pencil:\n\n  "First the music. Then the road. Then the message."',
@@ -202,7 +202,7 @@ export class Attic {
     musicBox.position.set(benchX - 0.05, benchTop_y + 0.06, benchZ + 0.0);
     musicBox.rotation.y = -0.2;
     this.group.add(musicBox);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-music',
       title: 'A small music box',
       body: 'Mahogany, latch tarnished. A brass plate is screwed to the lid:\n\n  Property of *M*ariel\n\nYou wind the crank a half-turn. A few notes stagger out, then nothing.',
@@ -217,7 +217,7 @@ export class Attic {
     folded.position.set(benchX - 0.05, benchTop_y + 0.018, benchZ + 0.55);
     folded.rotation.y = 0.18;
     this.group.add(folded);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-map',
       title: 'A folded county map',
       body: 'Brittle along the creases. The cover is stamped in faded ink:\n\n  *A*shwood County — Surveyors\' Edition\n\nMost of the interior is taken up by a road grid; one route is traced over twice in red.',
@@ -232,7 +232,7 @@ export class Attic {
     postcard.position.set(benchX - 0.05, benchTop_y + 0.018, benchZ + 1.0);
     postcard.rotation.y = 0.18;
     this.group.add(postcard);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-postcard',
       title: 'A faded postcard',
       body:
@@ -250,7 +250,7 @@ export class Attic {
     train.position.set(this.cx - 1.6, this.cy + 0.06, this.cz + 0.4);
     train.rotation.y = 0.6;
     this.group.add(train);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-train',
       title: 'A toy locomotive',
       body: 'Painted wood, paint chipped at the corners. The smokestack rattles when you tip it. There\'s no track up here for it to run on.',
@@ -264,7 +264,7 @@ export class Attic {
     const hatbox = makeHatboxMesh();
     hatbox.position.set(this.cx - halfW + 0.6, this.cy + 0.18, this.cz - halfD + 0.5);
     this.group.add(hatbox);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-hatbox',
       title: 'A round hat box',
       body: 'The lid is laced shut with twine. You don\'t want to disturb it. A faded shipping tag hangs off the side, the address worn smooth.',
@@ -285,7 +285,7 @@ export class Attic {
     phono.position.set(this.cx - halfW + 1.2, this.cy + 0.46, this.cz - halfD + 0.7);
     phono.rotation.y = 0.3;
     this.group.add(phono);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-phonograph',
       title: 'A small phonograph',
       body: 'Cabinet wood, brass horn dented at the lip. The crank is missing. A label pasted to the inside of the open lid is faded but legible:\n\n  "Property of Brand & Son — Ashwood."',
@@ -311,7 +311,7 @@ export class Attic {
     newsStack.position.set(this.cx + 0.4, this.cy + 0.05, this.cz + halfD - 0.7);
     newsStack.rotation.y = -0.18;
     this.group.add(newsStack);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'attic-newspapers',
       title: 'A stack of newspapers',
       body: 'All folded the same way, stacked neatly. The top one is dated decades back. A headline is half-visible: SEARCH CALLED OFF — NO TRACE FOUND.',

@@ -32,7 +32,7 @@ export class CabinInterior {
     note.rotation.x = -Math.PI / 2;
     note.rotation.z = 0.18;
     scene.add(note);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-note',
       title: 'Torn page',
       body:
@@ -53,7 +53,7 @@ export class CabinInterior {
     plaque.rotation.x = Math.PI / 2;
     scene.add(plaque);
     this.glowMeshes.push(plaque);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-beam',
       title: 'A nameplate on the beam',
       body: 'A small wooden plaque is nailed to the underside of the cross-beam. A name is burned into it, the letters uneven where the iron slipped:\n\n  B. Brand',
@@ -72,7 +72,7 @@ export class CabinInterior {
     envelope.rotation.z = 0.12;
     scene.add(envelope);
     this.glowMeshes.push(envelope);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-hearth',
       title: 'A burned envelope in the ash',
       body: 'Most of the envelope is gone — only a curl of paper at the edge of the hearth survived. You can still read the address:\n\n  …5 Ashwood Lane.\n\nThe rest crumbles when you touch it.',
@@ -89,7 +89,7 @@ export class CabinInterior {
     folded.rotation.y = 0.32;
     scene.add(folded);
     this.glowMeshes.push(folded);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-chair',
       title: 'A folded letter wedged under the seat',
       body: 'The paper is brittle. A few lines, in a careful hand:\n\n  "…and so I write to you, dear Henry, in haste, before the cabin is sealed for the season…"',
@@ -107,7 +107,7 @@ export class CabinInterior {
     book.position.y += 0.03;
     book.rotation.y = -0.18;
     scene.add(book);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-book',
       title: 'A worn leather notebook',
       body:
@@ -127,7 +127,7 @@ export class CabinInterior {
     photo.position.set(cabin.cx - halfW + cabin.wallT + 0.02, 1.55, cabin.cz + 0.7);
     photo.rotation.y = Math.PI / 2;
     scene.add(photo);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-photo',
       title: 'A framed photograph',
       body: 'Two figures stand in the cabin doorway, half-blurred by the long exposure. You can\'t quite make out their faces. On the back of the frame, in pencil:\n\n  "For *H*enry — Summer, before the snow."',
@@ -143,7 +143,7 @@ export class CabinInterior {
     coat.position.set(cabin.cx + halfW - 0.18, 1.45, cabin.cz + halfD - 0.6);
     coat.rotation.y = -Math.PI / 2;
     scene.add(coat);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-coat',
       title: 'A heavy oil-skin coat',
       body: 'Hanging on a peg, half-stiff with cold. The collar is patched with a stitched square of plain cloth. Inside the lining, a strip of canvas reads:\n\n  "Brand & Son — riggers — Ashwood."\n\nThe pockets are empty.',
@@ -160,7 +160,7 @@ export class CabinInterior {
     magazines.position.z += 0.10;
     magazines.rotation.y = -0.18;
     scene.add(magazines);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-magazines',
       title: 'A stack of magazines',
       body:
@@ -177,7 +177,7 @@ export class CabinInterior {
     ashtray.position.x -= 0.18;
     ashtray.position.z -= 0.10;
     scene.add(ashtray);
-    new Clue(interaction, journal, inspect, {
+    new Clue(interaction, journal, inspect, hand, {
       id: 'cabin-ashtray',
       title: 'A glass ashtray',
       body:

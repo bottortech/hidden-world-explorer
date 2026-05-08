@@ -4,10 +4,21 @@ import * as THREE from 'three';
 // of the player's view, idle by default. Other systems trigger short
 // scripted poses:
 //
-//   hand.tap()        — quick punch-forward (used on every interactive click)
-//   hand.holdKey(mesh) → Promise — runs the full key-pickup sequence:
-//                        reach forward, key snaps into palm, brief hold,
-//                        hand + key fade out, fade back in idle.
+//   hand.tap()                    — quick punch-forward, used on every
+//                                   interactive click for tactile feedback.
+//   hand.holdKey(mesh)            — Promise — full key-pickup choreography:
+//                                   reach, snap into palm, brief hold,
+//                                   hand + key fade out (key is consumed).
+//   hand.beginItemHold(mesh, opts) — Promise — reach forward and (optionally)
+//                                   reparent the mesh into the palm. Resolves
+//                                   when the hand reaches the holding pose so
+//                                   the caller can open the inspect view at
+//                                   that moment. The hand stays in pose
+//                                   indefinitely until endItemHold() is
+//                                   called.
+//   hand.endItemHold()            — restores the held mesh to its original
+//                                   parent / transform and animates the hand
+//                                   back to idle.
 //
 // Implementation is a simple per-state lerp driven by update(dt). All
 // transforms are in camera-local space; HandSystem.update is called by
@@ -33,10 +44,14 @@ export class HandSystem {
     this.keyAnchor.position.set(0.0, 0.04, 0.0);
     this.group.add(this.keyAnchor);
 
-    this.state = 'idle';      // 'idle' | 'tapping' | 'holding' | 'fading' | 'hidden' | 'returning'
+    this.state = 'idle';      // 'idle' | 'tapping' | 'reaching' | 'holding' | 'fading' | 'hidden' | 'returning'
     this.t = 0;               // seconds elapsed in current state
     this._currentResolve = null;
     this._heldMesh = null;
+    // 'key' = auto-fade after holding; 'item' = wait for endItemHold()
+    this._holdMode = null;
+    // For 'item' mode, the mesh's pre-pickup transform so we can restore it.
+    this._restoreData = null;
     this._opacity = 1;
   }
 
@@ -50,9 +65,12 @@ export class HandSystem {
   // Full pickup choreography. Returns a Promise that resolves once the
   // hand has faded out (caller can chain a room transition off it).
   holdKey(keyMesh) {
+    if (this.state !== 'idle') return Promise.resolve();
     return new Promise((resolve) => {
       this._currentResolve = resolve;
       this._heldMesh = keyMesh;
+      this._holdMode = 'key';
+      this._restoreData = null;
 
       // Detach from world, reparent to the hand anchor at the origin.
       keyMesh.parent?.remove(keyMesh);
@@ -64,6 +82,65 @@ export class HandSystem {
       this.state = 'reaching';
       this.t = 0;
     });
+  }
+
+  // Pick up an inspectable item. Resolves when the hand reaches the holding
+  // pose so the caller can open an inspect view at that moment. Pass
+  // { reparent: false } for wall-mounted items the player only "touches"
+  // (photo, plaque, hung coat) — the hand still reaches but the mesh stays
+  // where it is. Mesh's original transform is captured so endItemHold()
+  // can put it back exactly.
+  beginItemHold(mesh, { reparent = true } = {}) {
+    if (this.state !== 'idle') return Promise.resolve();
+    return new Promise((resolve) => {
+      this._currentResolve = resolve;
+      this._holdMode = 'item';
+
+      if (mesh && reparent) {
+        this._heldMesh = mesh;
+        this._restoreData = {
+          parent: mesh.parent,
+          position: mesh.position.clone(),
+          rotation: mesh.rotation.clone(),
+          scale: mesh.scale.clone(),
+        };
+        mesh.parent?.remove(mesh);
+        // Park at the palm anchor; reset rotation so the item displays
+        // canonically in the palm regardless of its world-frame rotation
+        // (e.g. a wall-mounted photo doesn't end up sideways in hand).
+        // Scale is preserved so absolute size stays consistent.
+        mesh.position.set(0, 0, 0);
+        mesh.rotation.set(0, 0, 0);
+        this.keyAnchor.add(mesh);
+      } else {
+        this._heldMesh = null;
+        this._restoreData = null;
+      }
+
+      this.state = 'reaching';
+      this.t = 0;
+    });
+  }
+
+  // Restore the held item and return the hand to idle. Idempotent — safe to
+  // call when nothing is held.
+  endItemHold() {
+    if (this._holdMode !== 'item') return;
+    const mesh = this._heldMesh;
+    const restore = this._restoreData;
+    if (mesh && restore) {
+      this.keyAnchor.remove(mesh);
+      restore.parent?.add(mesh);
+      mesh.position.copy(restore.position);
+      mesh.rotation.copy(restore.rotation);
+      mesh.scale.copy(restore.scale);
+    }
+    this._heldMesh = null;
+    this._restoreData = null;
+    this._holdMode = null;
+    this._currentResolve = null;
+    this.state = 'returning';
+    this.t = 0;
   }
 
   update(dt) {
@@ -91,33 +168,46 @@ export class HandSystem {
         const pos = new THREE.Vector3().lerpVectors(IDLE_POS, REACH_POS, easeOut(u));
         const rot = lerpEuler(IDLE_ROT, REACH_ROT, easeOut(u));
         this._setPose(pos, rot, 1);
-        if (u >= 1) { this.state = 'holding'; this.t = 0; }
+        if (u >= 1) {
+          this.state = 'holding';
+          this.t = 0;
+          // For item mode, this is when the inspect view should open. Resolve
+          // and clear so the auto-fade path doesn't double-resolve later.
+          if (this._holdMode === 'item') {
+            const r = this._currentResolve;
+            this._currentResolve = null;
+            r?.();
+          }
+        }
         break;
       }
       case 'holding': {
-        // Brief hold (0.55s) with a tiny vertical bob.
+        // Brief hold with a tiny vertical bob.
         const bob = Math.sin(this.t * 6) * 0.005;
         const pos = REACH_POS.clone();
         pos.y += bob;
         this._setPose(pos, REACH_ROT, 1);
-        if (this.t >= 0.55) { this.state = 'fading'; this.t = 0; }
+        // Auto-fade only for the consumed-key path; items stay in pose until
+        // endItemHold() is called.
+        if (this._holdMode === 'key' && this.t >= 0.55) {
+          this.state = 'fading';
+          this.t = 0;
+        }
         break;
       }
       case 'fading': {
-        // Fade hand + key over 0.40s.
+        // Fade hand + key over 0.40s. Only reached for the key path.
         const u = clamp01(this.t / 0.40);
         const opacity = 1 - u;
         this._setPose(REACH_POS, REACH_ROT, opacity);
         if (u >= 1) {
           this.state = 'hidden';
           this.t = 0;
-          // Drop the held key from the hand (the room will get rid of the
-          // mesh entirely; we just stop rendering it on the hand).
           if (this._heldMesh) {
             this.keyAnchor.remove(this._heldMesh);
             this._heldMesh = null;
           }
-          // Resolve the pickup Promise — caller (e.g. Game) takes over now.
+          this._holdMode = null;
           this._currentResolve?.();
           this._currentResolve = null;
         }
